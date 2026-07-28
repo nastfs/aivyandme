@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_authenticated/wardrobe/")({
   component: Wardrobe,
   head: () => ({
     meta: [
-      { title: "Kleiderschrank — Avis & Me" },
+      { title: "Kleiderschrank — Aivy & Me" },
       { name: "description", content: "Alle deine Teile, sortiert nach Kategorie." },
     ],
   }),

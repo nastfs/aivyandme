@@ -10,7 +10,7 @@ import { LogOut, User } from "lucide-react";
 export const Route = createFileRoute("/_authenticated/profile")({
   component: Profile,
   head: () => ({
-    meta: [{ title: "Profil — Avis & Me" }],
+    meta: [{ title: "Profil — Aivy & Me" }],
   }),
 });
 
@@ -70,7 +70,7 @@ function Profile() {
         </Button>
       </div>
 
-      <p className="mt-8 text-center text-xs text-muted-foreground">Avis &amp; Me · Version 0.1</p>
+      <p className="mt-8 text-center text-xs text-muted-foreground">Aivy &amp; Me · Version 0.1</p>
     </div>
   );
 }

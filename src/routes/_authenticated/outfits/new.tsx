@@ -18,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/outfits/new")({
   validateSearch: (s) => searchSchema.parse(s),
   component: NewOutfit,
   head: () => ({
-    meta: [{ title: "Neuer Look — Avis & Me" }],
+    meta: [{ title: "Neuer Look — Aivy & Me" }],
   }),
 });
 
