@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_authenticated/outfits/")({
   component: Outfits,
   head: () => ({
     meta: [
-      { title: "Outfits — Avis & Me" },
+      { title: "Outfits — Aivy & Me" },
       { name: "description", content: "Deine Looks. Geplant, gespeichert und immer passend." },
     ],
   }),

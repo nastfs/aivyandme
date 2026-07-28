@@ -10,8 +10,8 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
   head: () => ({
     meta: [
-      { title: "Anmelden — Avis & Me" },
-      { name: "description", content: "Melde dich in Avis & Me an und öffne deinen digitalen Kleiderschrank." },
+      { title: "Anmelden — Aivy & Me" },
+      { name: "description", content: "Melde dich in Aivy & Me an und öffne deinen digitalen Kleiderschrank." },
     ],
   }),
 });
@@ -60,7 +60,7 @@ function AuthPage() {
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
       <div className="mb-10 text-center">
-        <h1 className="text-5xl">Avis &amp; Me</h1>
+        <h1 className="text-5xl">Aivy &amp; Me</h1>
         <p className="mt-3 text-sm text-muted-foreground">
           Dein digitaler Kleiderschrank. Bewusst kombinieren, planen, tragen.
         </p>
