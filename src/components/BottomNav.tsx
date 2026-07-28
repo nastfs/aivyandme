@@ -3,9 +3,9 @@ import { Home, Shirt, LayoutGrid, User } from "lucide-react";
 
 const items = [
   { to: "/", label: "Home", icon: Home, exact: true },
-  { to: "/wardrobe", label: "Kleiderschrank", icon: LayoutGrid },
-  { to: "/outfits", label: "Outfits", icon: Shirt },
-  { to: "/profile", label: "Profil", icon: User },
+  { to: "/wardrobe", label: "Kleiderschrank", icon: LayoutGrid, exact: false },
+  { to: "/outfits", label: "Outfits", icon: Shirt, exact: false },
+  { to: "/profile", label: "Profil", icon: User, exact: false },
 ] as const;
 
 export function BottomNav() {

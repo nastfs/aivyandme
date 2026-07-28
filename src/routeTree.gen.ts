@@ -9,27 +9,209 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
+import { Route as AuthenticatedWardrobeIndexRouteImport } from './routes/_authenticated/wardrobe/index'
+import { Route as AuthenticatedOutfitsIndexRouteImport } from './routes/_authenticated/outfits/index'
+import { Route as AuthenticatedWardrobeAddRouteImport } from './routes/_authenticated/wardrobe/add'
+import { Route as AuthenticatedOutfitsNewRouteImport } from './routes/_authenticated/outfits/new'
 
-export interface FileRoutesByFullPath {}
-export interface FileRoutesByTo {}
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedWardrobeIndexRoute =
+  AuthenticatedWardrobeIndexRouteImport.update({
+    id: '/wardrobe/',
+    path: '/wardrobe/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedOutfitsIndexRoute =
+  AuthenticatedOutfitsIndexRouteImport.update({
+    id: '/outfits/',
+    path: '/outfits/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedWardrobeAddRoute =
+  AuthenticatedWardrobeAddRouteImport.update({
+    id: '/wardrobe/add',
+    path: '/wardrobe/add',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedOutfitsNewRoute = AuthenticatedOutfitsNewRouteImport.update({
+  id: '/outfits/new',
+  path: '/outfits/new',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+
+export interface FileRoutesByFullPath {
+  '/': typeof AuthenticatedIndexRoute
+  '/auth': typeof AuthRoute
+  '/profile': typeof AuthenticatedProfileRoute
+  '/outfits/new': typeof AuthenticatedOutfitsNewRoute
+  '/wardrobe/add': typeof AuthenticatedWardrobeAddRoute
+  '/outfits/': typeof AuthenticatedOutfitsIndexRoute
+  '/wardrobe/': typeof AuthenticatedWardrobeIndexRoute
+}
+export interface FileRoutesByTo {
+  '/auth': typeof AuthRoute
+  '/profile': typeof AuthenticatedProfileRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/outfits/new': typeof AuthenticatedOutfitsNewRoute
+  '/wardrobe/add': typeof AuthenticatedWardrobeAddRoute
+  '/outfits': typeof AuthenticatedOutfitsIndexRoute
+  '/wardrobe': typeof AuthenticatedWardrobeIndexRoute
+}
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/_authenticated/profile': typeof AuthenticatedProfileRoute
+  '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/outfits/new': typeof AuthenticatedOutfitsNewRoute
+  '/_authenticated/wardrobe/add': typeof AuthenticatedWardrobeAddRoute
+  '/_authenticated/outfits/': typeof AuthenticatedOutfitsIndexRoute
+  '/_authenticated/wardrobe/': typeof AuthenticatedWardrobeIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: never
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/profile'
+    | '/outfits/new'
+    | '/wardrobe/add'
+    | '/outfits/'
+    | '/wardrobe/'
   fileRoutesByTo: FileRoutesByTo
-  to: never
-  id: '__root__'
+  to:
+    | '/auth'
+    | '/profile'
+    | '/'
+    | '/outfits/new'
+    | '/wardrobe/add'
+    | '/outfits'
+    | '/wardrobe'
+  id:
+    | '__root__'
+    | '/_authenticated'
+    | '/auth'
+    | '/_authenticated/profile'
+    | '/_authenticated/'
+    | '/_authenticated/outfits/new'
+    | '/_authenticated/wardrobe/add'
+    | '/_authenticated/outfits/'
+    | '/_authenticated/wardrobe/'
   fileRoutesById: FileRoutesById
 }
-export interface RootRouteChildren {}
-
-declare module '@tanstack/react-router' {
-  interface FileRoutesByPath {}
+export interface RootRouteChildren {
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuthRoute: typeof AuthRoute
 }
 
-const rootRouteChildren: RootRouteChildren = {}
+declare module '@tanstack/react-router' {
+  interface FileRoutesByPath {
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/': {
+      id: '/_authenticated/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/profile': {
+      id: '/_authenticated/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof AuthenticatedProfileRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/wardrobe/': {
+      id: '/_authenticated/wardrobe/'
+      path: '/wardrobe'
+      fullPath: '/wardrobe/'
+      preLoaderRoute: typeof AuthenticatedWardrobeIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/outfits/': {
+      id: '/_authenticated/outfits/'
+      path: '/outfits'
+      fullPath: '/outfits/'
+      preLoaderRoute: typeof AuthenticatedOutfitsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/wardrobe/add': {
+      id: '/_authenticated/wardrobe/add'
+      path: '/wardrobe/add'
+      fullPath: '/wardrobe/add'
+      preLoaderRoute: typeof AuthenticatedWardrobeAddRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/outfits/new': {
+      id: '/_authenticated/outfits/new'
+      path: '/outfits/new'
+      fullPath: '/outfits/new'
+      preLoaderRoute: typeof AuthenticatedOutfitsNewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+  }
+}
+
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedOutfitsNewRoute: typeof AuthenticatedOutfitsNewRoute
+  AuthenticatedWardrobeAddRoute: typeof AuthenticatedWardrobeAddRoute
+  AuthenticatedOutfitsIndexRoute: typeof AuthenticatedOutfitsIndexRoute
+  AuthenticatedWardrobeIndexRoute: typeof AuthenticatedWardrobeIndexRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedProfileRoute: AuthenticatedProfileRoute,
+  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedOutfitsNewRoute: AuthenticatedOutfitsNewRoute,
+  AuthenticatedWardrobeAddRoute: AuthenticatedWardrobeAddRoute,
+  AuthenticatedOutfitsIndexRoute: AuthenticatedOutfitsIndexRoute,
+  AuthenticatedWardrobeIndexRoute: AuthenticatedWardrobeIndexRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
+const rootRouteChildren: RootRouteChildren = {
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuthRoute: AuthRoute,
+}
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
