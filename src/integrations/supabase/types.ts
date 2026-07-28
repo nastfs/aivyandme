@@ -14,7 +14,143 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      outfit_items: {
+        Row: {
+          item_id: string
+          outfit_id: string
+        }
+        Insert: {
+          item_id: string
+          outfit_id: string
+        }
+        Update: {
+          item_id?: string
+          outfit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outfit_items_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "wardrobe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outfit_items_outfit_id_fkey"
+            columns: ["outfit_id"]
+            isOneToOne: false
+            referencedRelation: "outfits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outfit_plans: {
+        Row: {
+          created_at: string
+          id: string
+          outfit_id: string
+          planned_date: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          outfit_id: string
+          planned_date: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          outfit_id?: string
+          planned_date?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outfit_plans_outfit_id_fkey"
+            columns: ["outfit_id"]
+            isOneToOne: false
+            referencedRelation: "outfits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outfits: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
+      wardrobe_items: {
+        Row: {
+          category: Database["public"]["Enums"]["item_category"]
+          color: string | null
+          created_at: string
+          id: string
+          image_url: string
+          name: string | null
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          category?: Database["public"]["Enums"]["item_category"]
+          color?: string | null
+          created_at?: string
+          id?: string
+          image_url: string
+          name?: string | null
+          notes?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["item_category"]
+          color?: string | null
+          created_at?: string
+          id?: string
+          image_url?: string
+          name?: string | null
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +159,16 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      item_category:
+        | "oberteile"
+        | "hosen"
+        | "kleider"
+        | "blazer"
+        | "roecke"
+        | "schuhe"
+        | "taschen"
+        | "sport"
+        | "sonstiges"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +295,18 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      item_category: [
+        "oberteile",
+        "hosen",
+        "kleider",
+        "blazer",
+        "roecke",
+        "schuhe",
+        "taschen",
+        "sport",
+        "sonstiges",
+      ],
+    },
   },
 } as const
