@@ -18,6 +18,8 @@ export const smoothItemImage = createServerFn({ method: "POST" })
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) throw new Error("KI ist gerade nicht verfügbar");
 
+    const personRule =
+      " Falls eine Person das Teil trägt: extrahiere nur das Kleidungsstück selbst und entferne Person, Haut, Haare und Körperteile vollständig; ergänze verdeckte Bereiche plausibel, ohne Schnitt, Farbe oder Muster zu verändern.";
     const shoeRule =
       data.category === "schuhe"
         ? data.view === "side"
