@@ -48,6 +48,8 @@ type Draft = {
   matchName: string | null;
   duplicateDecided: boolean;
   correction: string;
+  /** eigenes Einzelfoto dieses Teils (überschreibt das Gruppenfoto) */
+  sourceDataUrl: string;
 };
 
 function AddItem() {
@@ -56,6 +58,7 @@ function AddItem() {
   const smooth = useServerFn(smoothItemImage);
   const refine = useServerFn(refineItem);
   const fileRef = useRef<HTMLInputElement>(null);
+  const correctFileRef = useRef<HTMLInputElement>(null);
   const [rawUrl, setRawUrl] = useState("");
   const [cropping, setCropping] = useState(false);
   const [dataUrl, setDataUrl] = useState("");
@@ -64,6 +67,7 @@ function AddItem() {
   const [saving, setSaving] = useState(false);
   const [correctKey, setCorrectKey] = useState<string | null>(null);
   const [correctText, setCorrectText] = useState("");
+  const [correctImage, setCorrectImage] = useState("");
   const [correcting, setCorrecting] = useState(false);
 
   function patch(key: string, changes: Partial<Draft>) {
@@ -112,6 +116,7 @@ function AddItem() {
         matchName: it.matchName ?? null,
         duplicateDecided: false,
         correction: "",
+        sourceDataUrl: "",
       }));
       setDrafts(next);
       toast.success(items.length > 1 ? `${items.length} Teile erkannt` : "Teil erkannt", {
@@ -157,30 +162,43 @@ function AddItem() {
   async function applyCorrection() {
     const d = drafts.find((x) => x.key === correctKey);
     const text = correctText.trim();
-    if (!d || !text) return;
+    if (!d || (!text && !correctImage)) return;
     setCorrecting(true);
     try {
       const refined = await refine({
-        data: { correction: text, name: d.name, category: d.category, color: d.color },
+        data: {
+          correction: text,
+          imageDataUrl: correctImage || undefined,
+          name: d.name,
+          category: d.category,
+          color: d.color,
+        },
       });
+      const base = correctImage || d.sourceDataUrl || dataUrl;
       patch(d.key, {
         name: refined.name,
         category: refined.category as CategoryValue,
         color: refined.color,
         correction: text,
+        sourceDataUrl: correctImage || d.sourceDataUrl,
+        keepOriginal: false,
         smoothing: true,
         aiDataUrl: "",
         aiDataUrl2: "",
       });
       setCorrectKey(null);
       setCorrectText("");
-      toast.success("Korrektur übernommen — KI-Bild wird neu erzeugt");
+      setCorrectImage("");
+      toast.success(`Korrektur übernommen: ${refined.name}`, {
+        description: "KI-Bild wird neu erzeugt",
+      });
 
       const focus = d.description || d.name;
+      const useFocus = !correctImage && drafts.length > 1 ? focus : undefined;
       smooth({
         data: {
-          imageDataUrl: dataUrl,
-          focus: drafts.length > 1 ? focus : undefined,
+          imageDataUrl: base,
+          focus: useFocus,
           category: refined.category,
           view: "top",
           correction: text,
@@ -197,8 +215,8 @@ function AddItem() {
       if (refined.category === "schuhe") {
         smooth({
           data: {
-            imageDataUrl: dataUrl,
-            focus: drafts.length > 1 ? focus : undefined,
+            imageDataUrl: base,
+            focus: useFocus,
             category: "schuhe",
             view: "side",
             correction: text,
