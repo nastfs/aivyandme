@@ -9,7 +9,7 @@ import { CATEGORIES, type CategoryValue } from "@/lib/categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ChevronLeft, Sparkles, Trash2, Shirt } from "lucide-react";
+import { ChevronLeft, Sparkles, Trash2, Shirt, Check } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/wardrobe/$id")({
@@ -34,18 +34,20 @@ function ItemDetail() {
   const [saving, setSaving] = useState(false);
   const [smoothing, setSmoothing] = useState(false);
   const [preview, setPreview] = useState<string>("");
+  const [slide, setSlide] = useState(0);
 
   const { data } = useQuery({
     queryKey: ["wardrobe-item", id],
     queryFn: async () => {
       const { data: item, error } = await supabase
         .from("wardrobe_items")
-        .select("id, image_url, category, name, color")
+        .select("id, image_url, ai_image_url, use_ai_image, category, name, color")
         .eq("id", id)
         .single();
       if (error) throw error;
       const url = await signedUrl(item.image_url);
-      return { item, url };
+      const aiUrl = item.ai_image_url ? await signedUrl(item.ai_image_url) : null;
+      return { item, url, aiUrl };
     },
   });
 
@@ -116,7 +118,10 @@ function ItemDetail() {
         .from("wardrobe")
         .upload(path, blob, { contentType: "image/png" });
       if (upErr) throw upErr;
-      const { error } = await supabase.from("wardrobe_items").update({ image_url: path }).eq("id", id);
+      const { error } = await supabase
+        .from("wardrobe_items")
+        .update({ ai_image_url: path, use_ai_image: true })
+        .eq("id", id);
       if (error) throw error;
       setPreview("");
       toast.success("Neues Bild übernommen");
@@ -126,6 +131,15 @@ function ItemDetail() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function toggleUseAi() {
+    if (!data?.item) return;
+    const next = !(data.item.use_ai_image !== false);
+    const { error } = await supabase.from("wardrobe_items").update({ use_ai_image: next }).eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success(next ? "KI-Bild wird angezeigt" : "Originalbild wird angezeigt");
+    qc.invalidateQueries();
   }
 
   return (
