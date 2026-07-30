@@ -48,6 +48,8 @@ type Draft = {
   matchName: string | null;
   duplicateDecided: boolean;
   correction: string;
+  /** eigenes Einzelfoto dieses Teils (überschreibt das Gruppenfoto) */
+  sourceDataUrl: string;
 };
 
 function AddItem() {
@@ -56,6 +58,7 @@ function AddItem() {
   const smooth = useServerFn(smoothItemImage);
   const refine = useServerFn(refineItem);
   const fileRef = useRef<HTMLInputElement>(null);
+  const correctFileRef = useRef<HTMLInputElement>(null);
   const [rawUrl, setRawUrl] = useState("");
   const [cropping, setCropping] = useState(false);
   const [dataUrl, setDataUrl] = useState("");
@@ -64,6 +67,7 @@ function AddItem() {
   const [saving, setSaving] = useState(false);
   const [correctKey, setCorrectKey] = useState<string | null>(null);
   const [correctText, setCorrectText] = useState("");
+  const [correctImage, setCorrectImage] = useState("");
   const [correcting, setCorrecting] = useState(false);
 
   function patch(key: string, changes: Partial<Draft>) {
@@ -112,6 +116,7 @@ function AddItem() {
         matchName: it.matchName ?? null,
         duplicateDecided: false,
         correction: "",
+        sourceDataUrl: "",
       }));
       setDrafts(next);
       toast.success(items.length > 1 ? `${items.length} Teile erkannt` : "Teil erkannt", {
@@ -157,30 +162,43 @@ function AddItem() {
   async function applyCorrection() {
     const d = drafts.find((x) => x.key === correctKey);
     const text = correctText.trim();
-    if (!d || !text) return;
+    if (!d || (!text && !correctImage)) return;
     setCorrecting(true);
     try {
       const refined = await refine({
-        data: { correction: text, name: d.name, category: d.category, color: d.color },
+        data: {
+          correction: text,
+          imageDataUrl: correctImage || undefined,
+          name: d.name,
+          category: d.category,
+          color: d.color,
+        },
       });
+      const base = correctImage || d.sourceDataUrl || dataUrl;
       patch(d.key, {
         name: refined.name,
         category: refined.category as CategoryValue,
         color: refined.color,
         correction: text,
+        sourceDataUrl: correctImage || d.sourceDataUrl,
+        keepOriginal: false,
         smoothing: true,
         aiDataUrl: "",
         aiDataUrl2: "",
       });
       setCorrectKey(null);
       setCorrectText("");
-      toast.success("Korrektur übernommen — KI-Bild wird neu erzeugt");
+      setCorrectImage("");
+      toast.success(`Korrektur übernommen: ${refined.name}`, {
+        description: "KI-Bild wird neu erzeugt",
+      });
 
       const focus = d.description || d.name;
+      const useFocus = !correctImage && drafts.length > 1 ? focus : undefined;
       smooth({
         data: {
-          imageDataUrl: dataUrl,
-          focus: drafts.length > 1 ? focus : undefined,
+          imageDataUrl: base,
+          focus: useFocus,
           category: refined.category,
           view: "top",
           correction: text,
@@ -197,8 +215,8 @@ function AddItem() {
       if (refined.category === "schuhe") {
         smooth({
           data: {
-            imageDataUrl: dataUrl,
-            focus: drafts.length > 1 ? focus : undefined,
+            imageDataUrl: base,
+            focus: useFocus,
             category: "schuhe",
             view: "side",
             correction: text,
@@ -222,15 +240,26 @@ function AddItem() {
     try {
       const { data: userData } = await supabase.auth.getUser();
       const uid = userData.user!.id;
-      const originalBlob = await (await fetch(dataUrl)).blob();
-      const originalPath = `${uid}/${crypto.randomUUID()}.jpg`;
-      const { error: upErr } = await supabase.storage
-        .from("wardrobe")
-        .upload(originalPath, originalBlob, { contentType: originalBlob.type || "image/jpeg" });
-      if (upErr) throw upErr;
+      async function uploadOriginal(url: string) {
+        const blob = await (await fetch(url)).blob();
+        const path = `${uid}/${crypto.randomUUID()}.jpg`;
+        const { error } = await supabase.storage
+          .from("wardrobe")
+          .upload(path, blob, { contentType: blob.type || "image/jpeg" });
+        if (error) throw error;
+        return path;
+      }
+      let groupPath: string | null = null;
 
       const rows = [];
       for (const d of chosen) {
+        let originalPath: string;
+        if (d.sourceDataUrl) {
+          originalPath = await uploadOriginal(d.sourceDataUrl);
+        } else {
+          groupPath = groupPath ?? (await uploadOriginal(dataUrl));
+          originalPath = groupPath;
+        }
         let aiPath: string | null = null;
         let aiPath2: string | null = null;
         if (d.aiDataUrl) {
@@ -386,7 +415,9 @@ function AddItem() {
             <div className="flex gap-4">
               <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-secondary">
                 <img
-                  src={!d.keepOriginal && d.aiDataUrl ? d.aiDataUrl : dataUrl}
+                  src={
+                    !d.keepOriginal && d.aiDataUrl ? d.aiDataUrl : d.sourceDataUrl || dataUrl
+                  }
                   alt=""
                   className={`h-full w-full object-cover transition ${d.smoothing && !d.keepOriginal ? "opacity-50 blur-sm" : ""}`}
                 />
@@ -470,6 +501,9 @@ function AddItem() {
             {d.correction && (
               <p className="text-xs text-muted-foreground">Deine Korrektur: „{d.correction}"</p>
             )}
+            {d.sourceDataUrl && (
+              <p className="text-xs text-muted-foreground">Eigenes Einzelfoto angehängt</p>
+            )}
           </div>
         ))}
       </div>
@@ -479,8 +513,8 @@ function AddItem() {
           <DialogHeader>
             <DialogTitle>Was ist es wirklich?</DialogTitle>
             <DialogDescription>
-              Beschreibe kurz, was falsch erkannt wurde — z. B. „Kein Turtleneck, sondern ein Cardigan
-              mit kurzem V-Ausschnitt und Knopfleiste". Name, Kategorie und KI-Bild werden neu erzeugt.
+              Beschreibe kurz, was falsch erkannt wurde — oder lade einfach ein einzelnes Foto genau
+              dieses Teils hoch. Name, Kategorie und KI-Bild werden neu erzeugt.
             </DialogDescription>
           </DialogHeader>
           <Textarea
@@ -489,11 +523,55 @@ function AddItem() {
             rows={4}
             placeholder="z. B. Das ist ein Cardigan, offen zu tragen, mit V-Ausschnitt."
           />
+          <input
+            ref={correctFileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              const reader = new FileReader();
+              reader.onload = () => setCorrectImage(reader.result as string);
+              reader.readAsDataURL(f);
+              e.target.value = "";
+            }}
+          />
+          {correctImage ? (
+            <div className="flex items-center gap-3 rounded-2xl border border-border p-3">
+              <img src={correctImage} alt="" className="h-16 w-16 rounded-xl object-cover" />
+              <p className="flex-1 text-xs text-muted-foreground">
+                Dieses Foto wird als Grundlage für das Teil verwendet.
+              </p>
+              <button
+                type="button"
+                onClick={() => setCorrectImage("")}
+                aria-label="Foto entfernen"
+                className="rounded-full border border-border p-1.5 text-muted-foreground"
+              >
+                <X className="h-4 w-4" strokeWidth={1.5} />
+              </button>
+            </div>
+          ) : (
+            <Button variant="outline" onClick={() => correctFileRef.current?.click()}>
+              <ImagePlus className="mr-2 h-4 w-4" />
+              Einzelfoto dieses Teils anhängen
+            </Button>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCorrectKey(null)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCorrectKey(null);
+                setCorrectImage("");
+              }}
+            >
               Abbrechen
             </Button>
-            <Button onClick={applyCorrection} disabled={correcting || !correctText.trim()}>
+            <Button
+              onClick={applyCorrection}
+              disabled={correcting || (!correctText.trim() && !correctImage)}
+            >
               {correcting ? "Übernehme…" : "Korrektur übernehmen"}
             </Button>
           </DialogFooter>
