@@ -2,13 +2,22 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { detectItems, smoothItemImage } from "@/lib/wardrobe.functions";
+import { detectItems, smoothItemImage, refineItem } from "@/lib/wardrobe.functions";
 import { CATEGORIES, type CategoryValue } from "@/lib/categories";
 import { ImageCropper } from "@/components/ImageCropper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, ImagePlus, Sparkles, Check, Crop } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { X, ImagePlus, Sparkles, Check, Crop, PencilLine } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/wardrobe/add")({
@@ -38,12 +47,14 @@ type Draft = {
   include: boolean;
   matchName: string | null;
   duplicateDecided: boolean;
+  correction: string;
 };
 
 function AddItem() {
   const navigate = useNavigate();
   const detect = useServerFn(detectItems);
   const smooth = useServerFn(smoothItemImage);
+  const refine = useServerFn(refineItem);
   const fileRef = useRef<HTMLInputElement>(null);
   const [rawUrl, setRawUrl] = useState("");
   const [cropping, setCropping] = useState(false);
@@ -51,6 +62,9 @@ function AddItem() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [correctKey, setCorrectKey] = useState<string | null>(null);
+  const [correctText, setCorrectText] = useState("");
+  const [correcting, setCorrecting] = useState(false);
 
   function patch(key: string, changes: Partial<Draft>) {
     setDrafts((ds) => ds.map((d) => (d.key === key ? { ...d, ...changes } : d)));
@@ -97,6 +111,7 @@ function AddItem() {
         include: !it.matchName,
         matchName: it.matchName ?? null,
         duplicateDecided: false,
+        correction: "",
       }));
       setDrafts(next);
       toast.success(items.length > 1 ? `${items.length} Teile erkannt` : "Teil erkannt", {
@@ -130,6 +145,76 @@ function AddItem() {
   }
 
   async function onSave() {
+    if (!dataUrl) return;
+    return saveInner();
+  }
+
+  function removeDraft(key: string) {
+    setDrafts((ds) => ds.filter((d) => d.key !== key));
+    toast("Vorschlag verworfen");
+  }
+
+  async function applyCorrection() {
+    const d = drafts.find((x) => x.key === correctKey);
+    const text = correctText.trim();
+    if (!d || !text) return;
+    setCorrecting(true);
+    try {
+      const refined = await refine({
+        data: { correction: text, name: d.name, category: d.category, color: d.color },
+      });
+      patch(d.key, {
+        name: refined.name,
+        category: refined.category as CategoryValue,
+        color: refined.color,
+        correction: text,
+        smoothing: true,
+        aiDataUrl: "",
+        aiDataUrl2: "",
+      });
+      setCorrectKey(null);
+      setCorrectText("");
+      toast.success("Korrektur übernommen — KI-Bild wird neu erzeugt");
+
+      const focus = d.description || d.name;
+      smooth({
+        data: {
+          imageDataUrl: dataUrl,
+          focus: drafts.length > 1 ? focus : undefined,
+          category: refined.category,
+          view: "top",
+          correction: text,
+        },
+      })
+        .then(({ b64 }) =>
+          patch(d.key, { aiDataUrl: `data:image/png;base64,${b64}`, smoothing: false }),
+        )
+        .catch(() => {
+          patch(d.key, { smoothing: false });
+          toast.error("Neues KI-Bild fehlgeschlagen");
+        });
+
+      if (refined.category === "schuhe") {
+        smooth({
+          data: {
+            imageDataUrl: dataUrl,
+            focus: drafts.length > 1 ? focus : undefined,
+            category: "schuhe",
+            view: "side",
+            correction: text,
+          },
+        })
+          .then(({ b64 }) => patch(d.key, { aiDataUrl2: `data:image/png;base64,${b64}` }))
+          .catch(() => {});
+      }
+    } catch (e: any) {
+      toast.error(e.message ?? "Korrektur fehlgeschlagen");
+    } finally {
+      setCorrecting(false);
+    }
+  }
+
+  async function saveInner() {
     if (!dataUrl) return;
     const chosen = drafts.filter((d) => d.include);
     if (!chosen.length) return toast.error("Wähle mindestens ein Teil aus");
@@ -259,7 +344,15 @@ function AddItem() {
 
       <div className="space-y-4">
         {drafts.map((d) => (
-          <div key={d.key} className="space-y-4 rounded-3xl bg-card p-5 shadow-sm">
+          <div key={d.key} className="relative space-y-4 rounded-3xl bg-card p-5 shadow-sm">
+            <button
+              type="button"
+              onClick={() => removeDraft(d.key)}
+              aria-label="Vorschlag nicht übernehmen"
+              className="absolute right-3 top-3 rounded-full border border-border bg-background p-1.5 text-muted-foreground"
+            >
+              <X className="h-4 w-4" strokeWidth={1.5} />
+            </button>
             {d.matchName && !d.duplicateDecided && (
               <div className="rounded-2xl border border-primary/40 bg-accent p-4">
                 <p className="text-sm">
@@ -362,9 +455,50 @@ function AddItem() {
                 placeholder="z. B. Beige"
               />
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCorrectKey(d.key);
+                setCorrectText(d.correction);
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-border px-3 py-2 text-xs text-muted-foreground"
+            >
+              <PencilLine className="h-3.5 w-3.5" />
+              Falsch erkannt? Beschreiben & neu erzeugen
+            </button>
+            {d.correction && (
+              <p className="text-xs text-muted-foreground">Deine Korrektur: „{d.correction}"</p>
+            )}
           </div>
         ))}
       </div>
+
+      <Dialog open={!!correctKey} onOpenChange={(o) => !o && setCorrectKey(null)}>
+        <DialogContent className="rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>Was ist es wirklich?</DialogTitle>
+            <DialogDescription>
+              Beschreibe kurz, was falsch erkannt wurde — z. B. „Kein Turtleneck, sondern ein Cardigan
+              mit kurzem V-Ausschnitt und Knopfleiste". Name, Kategorie und KI-Bild werden neu erzeugt.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={correctText}
+            onChange={(e) => setCorrectText(e.target.value)}
+            rows={4}
+            placeholder="z. B. Das ist ein Cardigan, offen zu tragen, mit V-Ausschnitt."
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCorrectKey(null)}>
+              Abbrechen
+            </Button>
+            <Button onClick={applyCorrection} disabled={correcting || !correctText.trim()}>
+              {correcting ? "Übernehme…" : "Korrektur übernehmen"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {drafts.length > 0 && (
         <Button onClick={onSave} disabled={saving || analyzing} className="mt-6 w-full">

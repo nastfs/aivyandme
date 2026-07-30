@@ -8,7 +8,7 @@ type Cat = (typeof ALLOWED)[number];
 
 export const smoothItemImage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { imageDataUrl: string; focus?: string; category?: string; view?: "top" | "side" }) => {
+  .inputValidator((data: { imageDataUrl: string; focus?: string; category?: string; view?: "top" | "side"; correction?: string }) => {
     if (!data?.imageDataUrl?.startsWith("data:image/")) {
       throw new Error("imageDataUrl muss eine Data-URL sein");
     }
@@ -20,6 +20,9 @@ export const smoothItemImage = createServerFn({ method: "POST" })
 
     const personRule =
       " Falls eine Person das Teil trägt: extrahiere nur das Kleidungsstück selbst und entferne Person, Haut, Haare und Körperteile vollständig; ergänze verdeckte Bereiche plausibel, ohne Schnitt, Farbe oder Muster zu verändern.";
+    const correctionRule = data.correction
+      ? ` WICHTIGE KORREKTUR DER NUTZERIN (hat Vorrang vor deiner eigenen Interpretation): "${data.correction}". Stelle das Teil exakt so dar, wie hier beschrieben (z. B. Art des Teils, Ausschnitt, Länge, Öffnung/Knopfleiste), und übernimm dabei Farbe, Material und Muster aus dem Foto.`
+      : "";
     const shoeRule =
       data.category === "schuhe"
         ? data.view === "side"
@@ -47,6 +50,7 @@ export const smoothItemImage = createServerFn({ method: "POST" })
                     : "") +
                   "Erzeuge ein professionelles E-Commerce-Produktfoto (Stockfoto-Look) des Kleidungsstücks. Entferne den kompletten Hintergrund und ersetze ihn durch einen komplett gleichmäßigen, reinweißen Studio-Hintergrund ohne Schatten, Textur, Möbel oder Raumdetails. Entferne Hände, Arme, Personen, Kleiderbügel und alles andere, was das Teil hält. Zeige das Teil freigestellt, mittig, gerade ausgerichtet und flach/glatt liegend wie im Online-Shop-Katalog, mit weichem, gleichmäßigem Studiolicht und scharfen sauberen Kanten. Wichtig: Das Kleidungsstück selbst darf NICHT verändert oder verschönert werden — Schnitt, Proportionen, Farbe, Muster, Material, Gebrauchsspuren, Flecken und Knötchen müssen exakt erhalten bleiben. Nur Halte-Falten glätten und den Hintergrund entfernen." +
                   personRule +
+                  correctionRule +
                   shoeRule,
               },
               { type: "image_url", image_url: { url: data.imageDataUrl } },
@@ -200,6 +204,55 @@ export const detectItems = createServerFn({ method: "POST" })
         };
       });
       return items.length ? { items } : fallback;
+    } catch {
+      return fallback;
+    }
+  });
+
+/** Korrigiert Name/Kategorie/Farbe anhand einer Nutzerbeschreibung ("falsch erkannt"). */
+export const refineItem = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { correction: string; name?: string; category?: string; color?: string }) => {
+    if (!data?.correction?.trim()) throw new Error("Bitte kurz beschreiben, was es wirklich ist");
+    return data;
+  })
+  .handler(async ({ data }): Promise<{ name: string; category: Cat; color: string }> => {
+    const fallback = {
+      name: data.name || "Neues Teil",
+      category: (ALLOWED.includes(data.category as Cat) ? data.category : "sonstiges") as Cat,
+      color: data.color || "",
+    };
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) return fallback;
+
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Du bist ein Fashion-Assistent. Die Nutzerin korrigiert eine falsche Erkennung. Antworte AUSSCHLIESSLICH mit JSON: {\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|taschen|accessoires|sport|sonstiges\",\"name\":\"kurzer deutscher Name\",\"color\":\"Hauptfarbe deutsch\"}. Kein Markdown.",
+          },
+          {
+            role: "user",
+            content: `Bisher erkannt: Name "${data.name ?? ""}", Kategorie "${data.category ?? ""}", Farbe "${data.color ?? ""}". Korrektur der Nutzerin: "${data.correction}". Gib die korrigierten Werte zurück.`,
+          },
+        ],
+      }),
+    });
+    if (!res.ok) return fallback;
+    const json = await res.json();
+    const raw: string = json?.choices?.[0]?.message?.content ?? "";
+    try {
+      const p = JSON.parse(raw.replace(/```json|```/g, "").trim());
+      return {
+        name: typeof p?.name === "string" && p.name ? p.name.slice(0, 60) : fallback.name,
+        category: ALLOWED.includes(p?.category) ? (p.category as Cat) : fallback.category,
+        color: typeof p?.color === "string" && p.color ? p.color.slice(0, 40) : fallback.color,
+      };
     } catch {
       return fallback;
     }
