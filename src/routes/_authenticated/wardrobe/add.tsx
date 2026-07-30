@@ -307,7 +307,10 @@ function AddItem() {
       {cropping && rawUrl && (
         <ImageCropper
           src={rawUrl}
-          onCancel={() => setCropping(false)}
+          onCancel={() => {
+            setCropping(false);
+            if (!dataUrl) analyze(rawUrl);
+          }}
           onDone={(url) => {
             setCropping(false);
             analyze(url);
@@ -369,6 +372,13 @@ function AddItem() {
               ? `${drafts.filter((d) => d.include).length} von ${drafts.length} Teilen werden angelegt`
               : "Passt das? Ändere gerne noch:"}
         </div>
+      )}
+
+      {dataUrl && !analyzing && drafts.length === 0 && (
+        <Button variant="outline" onClick={() => analyze(dataUrl)} className="mb-4 w-full">
+          <Sparkles className="mr-2 h-4 w-4" />
+          Teile erkennen
+        </Button>
       )}
 
       <div className="space-y-4">
