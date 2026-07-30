@@ -129,7 +129,41 @@ function AddItem() {
 
       <div className="mb-6 rounded-3xl bg-card p-4 shadow-sm">
         {dataUrl ? (
-          <img src={dataUrl} alt="" className="mx-auto max-h-64 rounded-2xl object-contain" />
+          <>
+            <img
+              src={!keepOriginal && aiDataUrl ? aiDataUrl : dataUrl}
+              alt=""
+              className={`mx-auto max-h-64 rounded-2xl object-contain transition ${
+                smoothing && !keepOriginal ? "opacity-50 blur-sm" : ""
+              }`}
+            />
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              {smoothing
+                ? "KI glättet dein Foto…"
+                : keepOriginal
+                  ? "Originalfoto"
+                  : aiDataUrl
+                    ? "KI-geglättetes Bild"
+                    : "Originalfoto"}
+            </p>
+            <button
+              type="button"
+              onClick={() => setKeepOriginal((v) => !v)}
+              className="mt-3 flex w-full items-center gap-3 rounded-2xl border border-border px-4 py-3 text-left text-sm"
+            >
+              <span
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+                  keepOriginal ? "border-primary bg-primary text-primary-foreground" : "border-border"
+                }`}
+              >
+                {keepOriginal && <Check className="h-3.5 w-3.5" />}
+              </span>
+              Originalbild behalten
+            </button>
+            <p className="mt-1 text-center text-xs text-muted-foreground">
+              Beide Bilder werden gespeichert — du kannst später wechseln.
+            </p>
+          </>
         ) : (
           <button
             onClick={() => fileRef.current?.click()}
