@@ -17,3 +17,12 @@ export async function signedUrlsMap(paths: string[]): Promise<Record<string, str
   });
   return map;
 }
+
+/** Welches Bild soll angezeigt werden: KI-Bild (Default) oder Original. */
+export function displayPath(item: {
+  image_url: string;
+  ai_image_url?: string | null;
+  use_ai_image?: boolean | null;
+}) {
+  return item.use_ai_image !== false && item.ai_image_url ? item.ai_image_url : item.image_url;
+}
