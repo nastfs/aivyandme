@@ -240,15 +240,26 @@ function AddItem() {
     try {
       const { data: userData } = await supabase.auth.getUser();
       const uid = userData.user!.id;
-      const originalBlob = await (await fetch(dataUrl)).blob();
-      const originalPath = `${uid}/${crypto.randomUUID()}.jpg`;
-      const { error: upErr } = await supabase.storage
-        .from("wardrobe")
-        .upload(originalPath, originalBlob, { contentType: originalBlob.type || "image/jpeg" });
-      if (upErr) throw upErr;
+      async function uploadOriginal(url: string) {
+        const blob = await (await fetch(url)).blob();
+        const path = `${uid}/${crypto.randomUUID()}.jpg`;
+        const { error } = await supabase.storage
+          .from("wardrobe")
+          .upload(path, blob, { contentType: blob.type || "image/jpeg" });
+        if (error) throw error;
+        return path;
+      }
+      let groupPath: string | null = null;
 
       const rows = [];
       for (const d of chosen) {
+        let originalPath: string;
+        if (d.sourceDataUrl) {
+          originalPath = await uploadOriginal(d.sourceDataUrl);
+        } else {
+          groupPath = groupPath ?? (await uploadOriginal(dataUrl));
+          originalPath = groupPath;
+        }
         let aiPath: string | null = null;
         let aiPath2: string | null = null;
         if (d.aiDataUrl) {
