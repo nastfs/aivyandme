@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { addDays, format, isSameDay, startOfWeek } from "date-fns";
 import { de } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
-import { signedUrlsMap } from "@/lib/storage";
+import { signedUrlsMap, displayPath } from "@/lib/storage";
 import { Plus, Trash2, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -34,18 +34,18 @@ function Outfits() {
       const [{ data: outfits }, { data: plans }] = await Promise.all([
         supabase
           .from("outfits")
-          .select("id, name, created_at, outfit_items(wardrobe_items(image_url))")
+          .select("id, name, created_at, outfit_items(wardrobe_items(image_url, ai_image_url, use_ai_image))")
           .order("created_at", { ascending: false }),
         supabase
           .from("outfit_plans")
-          .select("id, planned_date, outfit_id, outfits(name, outfit_items(wardrobe_items(image_url)))"),
+          .select("id, planned_date, outfit_id, outfits(name, outfit_items(wardrobe_items(image_url, ai_image_url, use_ai_image)))"),
       ]);
       const paths: string[] = [];
       outfits?.forEach((o: any) =>
-        o.outfit_items?.forEach((oi: any) => oi.wardrobe_items?.image_url && paths.push(oi.wardrobe_items.image_url)),
+        o.outfit_items?.forEach((oi: any) => oi.wardrobe_items && paths.push(displayPath(oi.wardrobe_items))),
       );
       plans?.forEach((p: any) =>
-        p.outfits?.outfit_items?.forEach((oi: any) => oi.wardrobe_items?.image_url && paths.push(oi.wardrobe_items.image_url)),
+        p.outfits?.outfit_items?.forEach((oi: any) => oi.wardrobe_items && paths.push(displayPath(oi.wardrobe_items))),
       );
       const urls = await signedUrlsMap(paths);
       return { outfits: outfits ?? [], plans: plans ?? [], urls };
@@ -125,8 +125,8 @@ function Outfits() {
                     <div className="grid h-full grid-cols-2 gap-0.5 p-1">
                       {plan.outfits?.outfit_items?.slice(0, 4).map((oi: any, i: number) => (
                         <div key={i} className="overflow-hidden rounded-sm bg-card">
-                          {oi.wardrobe_items?.image_url && data?.urls[oi.wardrobe_items.image_url] && (
-                            <img src={data.urls[oi.wardrobe_items.image_url]} className="h-full w-full object-cover" alt="" />
+                          {oi.wardrobe_items && data?.urls[displayPath(oi.wardrobe_items)] && (
+                            <img src={data.urls[displayPath(oi.wardrobe_items)]} className="h-full w-full object-cover" alt="" />
                           )}
                         </div>
                       ))}
@@ -175,8 +175,8 @@ function Outfits() {
                 <div className="grid grid-cols-2 gap-1">
                   {o.outfit_items?.slice(0, 4).map((oi: any, i: number) => (
                     <div key={i} className="aspect-square overflow-hidden rounded-md bg-secondary">
-                      {oi.wardrobe_items?.image_url && data?.urls[oi.wardrobe_items.image_url] && (
-                        <img src={data.urls[oi.wardrobe_items.image_url]} className="h-full w-full object-cover" alt="" />
+                      {oi.wardrobe_items && data?.urls[displayPath(oi.wardrobe_items)] && (
+                        <img src={data.urls[displayPath(oi.wardrobe_items)]} className="h-full w-full object-cover" alt="" />
                       )}
                     </div>
                   ))}
