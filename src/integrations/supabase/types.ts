@@ -121,6 +121,7 @@ export type Database = {
       wardrobe_items: {
         Row: {
           ai_image_url: string | null
+          ai_image_url_2: string | null
           category: Database["public"]["Enums"]["item_category"]
           color: string | null
           created_at: string
@@ -133,6 +134,7 @@ export type Database = {
         }
         Insert: {
           ai_image_url?: string | null
+          ai_image_url_2?: string | null
           category?: Database["public"]["Enums"]["item_category"]
           color?: string | null
           created_at?: string
@@ -145,6 +147,7 @@ export type Database = {
         }
         Update: {
           ai_image_url?: string | null
+          ai_image_url_2?: string | null
           category?: Database["public"]["Enums"]["item_category"]
           color?: string | null
           created_at?: string
