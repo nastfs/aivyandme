@@ -33,7 +33,7 @@ export const smoothItemImage = createServerFn({ method: "POST" })
               {
                 type: "text",
                 text:
-                  "Erstelle aus diesem Foto ein sauberes Produktbild des Kleidungsstücks, wie auf einem Moodboard: das Teil freigestellt und glatt vor einem neutralen, hellen Off-White-Hintergrund, gleichmäßiges weiches Licht, gerade ausgerichtet, ohne Hände, Bügel, Personen oder Hintergrunddetails. Wichtig: Das Kleidungsstück selbst darf NICHT verändert oder perfektioniert werden — Schnitt, Farbe, Muster, Material, Gebrauchsspuren, Flecken, Knötchen und andere charakteristische Details müssen exakt erhalten bleiben. Nur Falten vom Halten glätten und den Hintergrund bereinigen.",
+                  "Verwandle dieses Foto in ein professionelles E-Commerce-Produktfoto (Stockfoto-Look) des Kleidungsstücks. Entferne den kompletten Hintergrund und ersetze ihn durch einen komplett gleichmäßigen, reinweißen Studio-Hintergrund ohne Schatten, Textur, Möbel oder Raumdetails. Entferne Hände, Arme, Personen, Kleiderbügel und alles andere, was das Teil hält. Zeige das Teil freigestellt, mittig, gerade ausgerichtet und flach/glatt liegend wie im Online-Shop-Katalog, mit weichem, gleichmäßigem Studiolicht und scharfen sauberen Kanten. Wichtig: Das Kleidungsstück selbst darf NICHT verändert oder verschönert werden — Schnitt, Proportionen, Farbe, Muster, Material, Gebrauchsspuren, Flecken und Knötchen müssen exakt erhalten bleiben. Nur Halte-Falten glätten und den Hintergrund entfernen.",
               },
               { type: "image_url", image_url: { url: data.imageDataUrl } },
             ],
