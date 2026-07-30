@@ -6,6 +6,52 @@ const ALLOWED = [
 ] as const;
 type Cat = (typeof ALLOWED)[number];
 
+export const smoothItemImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { imageDataUrl: string }) => {
+    if (!data?.imageDataUrl?.startsWith("data:image/")) {
+      throw new Error("imageDataUrl muss eine Data-URL sein");
+    }
+    return data;
+  })
+  .handler(async ({ data }) => {
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("KI ist gerade nicht verfügbar");
+
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3.1-flash-image",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text:
+                  "Erstelle aus diesem Foto ein sauberes Produktbild des Kleidungsstücks, wie auf einem Moodboard: das Teil freigestellt und glatt vor einem neutralen, hellen Off-White-Hintergrund, gleichmäßiges weiches Licht, gerade ausgerichtet, ohne Hände, Bügel, Personen oder Hintergrunddetails. Wichtig: Das Kleidungsstück selbst darf NICHT verändert oder perfektioniert werden — Schnitt, Farbe, Muster, Material, Gebrauchsspuren, Flecken, Knötchen und andere charakteristische Details müssen exakt erhalten bleiben. Nur Falten vom Halten glätten und den Hintergrund bereinigen.",
+              },
+              { type: "image_url", image_url: { url: data.imageDataUrl } },
+            ],
+          },
+        ],
+        modalities: ["image", "text"],
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Bildbearbeitung fehlgeschlagen (${res.status})`);
+    }
+    const json = await res.json();
+    const b64 = json?.data?.[0]?.b64_json;
+    if (!b64) throw new Error("Kein Bild erhalten");
+    return { b64 };
+  });
+
 export const classifyItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: { imageDataUrl: string }) => {

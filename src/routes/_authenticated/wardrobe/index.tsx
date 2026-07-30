@@ -93,7 +93,12 @@ function Wardrobe() {
           </p>
           <div className="grid grid-cols-2 gap-3 pb-8">
             {filtered.map((it) => (
-              <div key={it.id} className="overflow-hidden rounded-2xl bg-card shadow-sm">
+              <Link
+                key={it.id}
+                to="/wardrobe/$id"
+                params={{ id: it.id }}
+                className="block overflow-hidden rounded-2xl bg-card shadow-sm"
+              >
                 <div className="aspect-square bg-secondary">
                   {data?.urls[it.image_url] && (
                     <img src={data.urls[it.image_url]} alt={it.name ?? ""} className="h-full w-full object-cover" />
@@ -105,7 +110,7 @@ function Wardrobe() {
                     {categoryLabel(it.category)}{it.color ? ` · ${it.color}` : ""}
                   </p>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </>
