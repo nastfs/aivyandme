@@ -2,13 +2,22 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { detectItems, smoothItemImage } from "@/lib/wardrobe.functions";
+import { detectItems, smoothItemImage, refineItem } from "@/lib/wardrobe.functions";
 import { CATEGORIES, type CategoryValue } from "@/lib/categories";
 import { ImageCropper } from "@/components/ImageCropper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, ImagePlus, Sparkles, Check, Crop } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { X, ImagePlus, Sparkles, Check, Crop, PencilLine } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/wardrobe/add")({
@@ -38,12 +47,14 @@ type Draft = {
   include: boolean;
   matchName: string | null;
   duplicateDecided: boolean;
+  correction: string;
 };
 
 function AddItem() {
   const navigate = useNavigate();
   const detect = useServerFn(detectItems);
   const smooth = useServerFn(smoothItemImage);
+  const refine = useServerFn(refineItem);
   const fileRef = useRef<HTMLInputElement>(null);
   const [rawUrl, setRawUrl] = useState("");
   const [cropping, setCropping] = useState(false);
@@ -51,6 +62,9 @@ function AddItem() {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [correctKey, setCorrectKey] = useState<string | null>(null);
+  const [correctText, setCorrectText] = useState("");
+  const [correcting, setCorrecting] = useState(false);
 
   function patch(key: string, changes: Partial<Draft>) {
     setDrafts((ds) => ds.map((d) => (d.key === key ? { ...d, ...changes } : d)));
@@ -97,6 +111,7 @@ function AddItem() {
         include: !it.matchName,
         matchName: it.matchName ?? null,
         duplicateDecided: false,
+        correction: "",
       }));
       setDrafts(next);
       toast.success(items.length > 1 ? `${items.length} Teile erkannt` : "Teil erkannt", {
