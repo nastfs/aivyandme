@@ -146,6 +146,76 @@ function AddItem() {
 
   async function onSave() {
     if (!dataUrl) return;
+    return saveInner();
+  }
+
+  function removeDraft(key: string) {
+    setDrafts((ds) => ds.filter((d) => d.key !== key));
+    toast("Vorschlag verworfen");
+  }
+
+  async function applyCorrection() {
+    const d = drafts.find((x) => x.key === correctKey);
+    const text = correctText.trim();
+    if (!d || !text) return;
+    setCorrecting(true);
+    try {
+      const refined = await refine({
+        data: { correction: text, name: d.name, category: d.category, color: d.color },
+      });
+      patch(d.key, {
+        name: refined.name,
+        category: refined.category as CategoryValue,
+        color: refined.color,
+        correction: text,
+        smoothing: true,
+        aiDataUrl: "",
+        aiDataUrl2: "",
+      });
+      setCorrectKey(null);
+      setCorrectText("");
+      toast.success("Korrektur übernommen — KI-Bild wird neu erzeugt");
+
+      const focus = d.description || d.name;
+      smooth({
+        data: {
+          imageDataUrl: dataUrl,
+          focus: drafts.length > 1 ? focus : undefined,
+          category: refined.category,
+          view: "top",
+          correction: text,
+        },
+      })
+        .then(({ b64 }) =>
+          patch(d.key, { aiDataUrl: `data:image/png;base64,${b64}`, smoothing: false }),
+        )
+        .catch(() => {
+          patch(d.key, { smoothing: false });
+          toast.error("Neues KI-Bild fehlgeschlagen");
+        });
+
+      if (refined.category === "schuhe") {
+        smooth({
+          data: {
+            imageDataUrl: dataUrl,
+            focus: drafts.length > 1 ? focus : undefined,
+            category: "schuhe",
+            view: "side",
+            correction: text,
+          },
+        })
+          .then(({ b64 }) => patch(d.key, { aiDataUrl2: `data:image/png;base64,${b64}` }))
+          .catch(() => {});
+      }
+    } catch (e: any) {
+      toast.error(e.message ?? "Korrektur fehlgeschlagen");
+    } finally {
+      setCorrecting(false);
+    }
+  }
+
+  async function saveInner() {
+    if (!dataUrl) return;
     const chosen = drafts.filter((d) => d.include);
     if (!chosen.length) return toast.error("Wähle mindestens ein Teil aus");
     setSaving(true);
