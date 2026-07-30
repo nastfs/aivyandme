@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const ALLOWED = [
-  "oberteile","hosen","kleider","blazer","roecke","schuhe","taschen","sport","sonstiges",
+  "oberteile","hosen","kleider","blazer","roecke","schuhe","taschen","accessoires","sport","sonstiges",
 ] as const;
 type Cat = (typeof ALLOWED)[number];
 
