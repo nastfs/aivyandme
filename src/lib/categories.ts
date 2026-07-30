@@ -6,6 +6,7 @@ export const CATEGORIES = [
   { value: "roecke", label: "Röcke" },
   { value: "schuhe", label: "Schuhe" },
   { value: "taschen", label: "Taschen" },
+  { value: "accessoires", label: "Accessoires" },
   { value: "sport", label: "Sport" },
   { value: "sonstiges", label: "Sonstiges" },
 ] as const;
