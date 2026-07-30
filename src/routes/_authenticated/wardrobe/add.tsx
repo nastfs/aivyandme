@@ -30,6 +30,7 @@ type Draft = {
   category: CategoryValue;
   description: string;
   aiDataUrl: string;
+  aiDataUrl2: string;
   smoothing: boolean;
   keepOriginal: boolean;
   include: boolean;
@@ -67,6 +68,7 @@ function AddItem() {
           category: it.category as CategoryValue,
           description: it.description,
           aiDataUrl: "",
+          aiDataUrl2: "",
           smoothing: true,
           keepOriginal: false,
           include: true,
@@ -78,10 +80,13 @@ function AddItem() {
         );
         // KI-Bilder für jedes Teil automatisch erzeugen
         next.forEach((d) => {
+          const focus = next.length > 1 ? d.description || d.name : undefined;
           smooth({
             data: {
               imageDataUrl: url,
-              focus: next.length > 1 ? d.description || d.name : undefined,
+              focus,
+              category: d.category,
+              view: "top",
             },
           })
             .then(({ b64 }) => patch(d.key, { aiDataUrl: `data:image/png;base64,${b64}`, smoothing: false }))
@@ -91,6 +96,13 @@ function AddItem() {
                 description: "Das Originalfoto wird verwendet.",
               });
             });
+
+          // Schuhe bekommen zusätzlich ein zweites Bild in Seitenansicht
+          if (d.category === "schuhe") {
+            smooth({ data: { imageDataUrl: url, focus, category: "schuhe", view: "side" } })
+              .then(({ b64 }) => patch(d.key, { aiDataUrl2: `data:image/png;base64,${b64}` }))
+              .catch(() => {});
+          }
         });
       } catch (e: any) {
         toast.error("Automatische Erkennung fehlgeschlagen", { description: e.message });
@@ -119,6 +131,7 @@ function AddItem() {
       const rows = [];
       for (const d of chosen) {
         let aiPath: string | null = null;
+        let aiPath2: string | null = null;
         if (d.aiDataUrl) {
           const blob = await (await fetch(d.aiDataUrl)).blob();
           const p = `${uid}/${crypto.randomUUID()}.png`;
@@ -127,10 +140,19 @@ function AddItem() {
           });
           if (!error) aiPath = p;
         }
+        if (d.aiDataUrl2) {
+          const blob2 = await (await fetch(d.aiDataUrl2)).blob();
+          const p2 = `${uid}/${crypto.randomUUID()}.png`;
+          const { error } = await supabase.storage.from("wardrobe").upload(p2, blob2, {
+            contentType: "image/png",
+          });
+          if (!error) aiPath2 = p2;
+        }
         rows.push({
           user_id: uid,
           image_url: originalPath,
           ai_image_url: aiPath,
+          ai_image_url_2: aiPath2,
           use_ai_image: !d.keepOriginal,
           category: d.category,
           name: d.name || null,
