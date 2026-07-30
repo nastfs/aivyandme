@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { signedUrl } from "@/lib/storage";
 import { smoothItemImage } from "@/lib/wardrobe.functions";
+import { normalizeItemImages } from "@/lib/normalize-images";
 import { CATEGORIES, type CategoryValue } from "@/lib/categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +35,7 @@ function ItemDetail() {
   const [saving, setSaving] = useState(false);
   const [smoothing, setSmoothing] = useState(false);
   const [preview, setPreview] = useState<string>("");
+  const [normalizing, setNormalizing] = useState(false);
   const [slide, setSlide] = useState(0);
 
   const { data } = useQuery({
@@ -106,6 +108,23 @@ function ItemDetail() {
       toast.error("KI-Glättung fehlgeschlagen", { description: e.message });
     } finally {
       setSmoothing(false);
+    }
+  }
+
+  async function onNormalize() {
+    if (!data?.item) return;
+    setNormalizing(true);
+    try {
+      await normalizeItemImages(
+        { id: data.item.id, image_url: data.item.image_url, category },
+        smooth as any,
+      );
+      toast.success("Bilder ins Standard-Format gebracht");
+      qc.invalidateQueries();
+    } catch (e: any) {
+      toast.error("Vereinheitlichen fehlgeschlagen", { description: e.message });
+    } finally {
+      setNormalizing(false);
     }
   }
 
@@ -238,10 +257,20 @@ function ItemDetail() {
             <Button onClick={applyPreview} disabled={saving}>Übernehmen</Button>
           </div>
         ) : (
-          <Button variant="outline" className="mt-3 w-full" onClick={onSmooth} disabled={smoothing}>
-            <Sparkles className="mr-2 h-4 w-4" />
-            {smoothing ? "KI glättet das Bild…" : data?.aiUrl ? "KI-Bild neu erzeugen" : "Bild mit KI glätten"}
-          </Button>
+          <div className="mt-3 space-y-2">
+            <Button variant="outline" className="w-full" onClick={onSmooth} disabled={smoothing || normalizing}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              {smoothing ? "KI glättet das Bild…" : data?.aiUrl ? "KI-Bild neu erzeugen" : "Bild mit KI glätten"}
+            </Button>
+            <Button variant="outline" className="w-full" onClick={onNormalize} disabled={smoothing || normalizing}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              {normalizing
+                ? "Bilder werden vereinheitlicht…"
+                : category === "schuhe"
+                  ? "Ins Standard-Format bringen (oben + Seite)"
+                  : "Ins Standard-Format bringen"}
+            </Button>
+          </div>
         )}
         <p className="mt-2 text-center text-xs text-muted-foreground">
           Glättet Falten vom Halten und säubert den Hintergrund — Farbe, Schnitt und Gebrauchsspuren bleiben erhalten.
