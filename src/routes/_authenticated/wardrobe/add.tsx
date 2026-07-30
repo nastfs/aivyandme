@@ -344,7 +344,15 @@ function AddItem() {
 
       <div className="space-y-4">
         {drafts.map((d) => (
-          <div key={d.key} className="space-y-4 rounded-3xl bg-card p-5 shadow-sm">
+          <div key={d.key} className="relative space-y-4 rounded-3xl bg-card p-5 shadow-sm">
+            <button
+              type="button"
+              onClick={() => removeDraft(d.key)}
+              aria-label="Vorschlag nicht übernehmen"
+              className="absolute right-3 top-3 rounded-full border border-border bg-background p-1.5 text-muted-foreground"
+            >
+              <X className="h-4 w-4" strokeWidth={1.5} />
+            </button>
             {d.matchName && !d.duplicateDecided && (
               <div className="rounded-2xl border border-primary/40 bg-accent p-4">
                 <p className="text-sm">
@@ -447,9 +455,50 @@ function AddItem() {
                 placeholder="z. B. Beige"
               />
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCorrectKey(d.key);
+                setCorrectText(d.correction);
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-border px-3 py-2 text-xs text-muted-foreground"
+            >
+              <PencilLine className="h-3.5 w-3.5" />
+              Falsch erkannt? Beschreiben & neu erzeugen
+            </button>
+            {d.correction && (
+              <p className="text-xs text-muted-foreground">Deine Korrektur: „{d.correction}"</p>
+            )}
           </div>
         ))}
       </div>
+
+      <Dialog open={!!correctKey} onOpenChange={(o) => !o && setCorrectKey(null)}>
+        <DialogContent className="rounded-3xl">
+          <DialogHeader>
+            <DialogTitle>Was ist es wirklich?</DialogTitle>
+            <DialogDescription>
+              Beschreibe kurz, was falsch erkannt wurde — z. B. „Kein Turtleneck, sondern ein Cardigan
+              mit kurzem V-Ausschnitt und Knopfleiste". Name, Kategorie und KI-Bild werden neu erzeugt.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={correctText}
+            onChange={(e) => setCorrectText(e.target.value)}
+            rows={4}
+            placeholder="z. B. Das ist ein Cardigan, offen zu tragen, mit V-Ausschnitt."
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCorrectKey(null)}>
+              Abbrechen
+            </Button>
+            <Button onClick={applyCorrection} disabled={correcting || !correctText.trim()}>
+              {correcting ? "Übernehme…" : "Korrektur übernehmen"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {drafts.length > 0 && (
         <Button onClick={onSave} disabled={saving || analyzing} className="mt-6 w-full">
