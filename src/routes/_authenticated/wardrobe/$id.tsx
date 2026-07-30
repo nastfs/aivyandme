@@ -41,13 +41,14 @@ function ItemDetail() {
     queryFn: async () => {
       const { data: item, error } = await supabase
         .from("wardrobe_items")
-        .select("id, image_url, ai_image_url, use_ai_image, category, name, color")
+        .select("id, image_url, ai_image_url, ai_image_url_2, use_ai_image, category, name, color")
         .eq("id", id)
         .single();
       if (error) throw error;
       const url = await signedUrl(item.image_url);
       const aiUrl = item.ai_image_url ? await signedUrl(item.ai_image_url) : null;
-      return { item, url, aiUrl };
+      const aiUrl2 = item.ai_image_url_2 ? await signedUrl(item.ai_image_url_2) : null;
+      return { item, url, aiUrl, aiUrl2 };
     },
   });
 
@@ -96,7 +97,9 @@ function ItemDetail() {
         r.onerror = reject;
         r.readAsDataURL(blob);
       });
-      const { b64 } = await smooth({ data: { imageDataUrl: dataUrl } });
+      const { b64 } = await smooth({
+        data: { imageDataUrl: dataUrl, category, view: "top" },
+      });
       setPreview(`data:image/png;base64,${b64}`);
       toast.success("Vorschlag fertig — übernehmen oder verwerfen");
     } catch (e: any) {
@@ -164,6 +167,7 @@ function ItemDetail() {
             const useAi = data?.item?.use_ai_image !== false;
             const slides = [
               ...(data?.aiUrl ? [{ url: data.aiUrl, label: "KI-Bild" }] : []),
+              ...(data?.aiUrl2 ? [{ url: data.aiUrl2, label: "KI-Bild · Seitenansicht" }] : []),
               ...(data?.url ? [{ url: data.url, label: "Originalfoto" }] : []),
             ];
             if (!useAi) slides.reverse();
