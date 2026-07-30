@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { signedUrlsMap } from "@/lib/storage";
+import { signedUrlsMap, displayPath } from "@/lib/storage";
 import { categoryLabel } from "@/lib/categories";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
@@ -32,27 +32,27 @@ function Home() {
       const [{ data: items }, { data: plan }, { data: recent }] = await Promise.all([
         supabase
           .from("wardrobe_items")
-          .select("id, image_url, category")
+          .select("id, image_url, ai_image_url, use_ai_image, category")
           .order("created_at", { ascending: false })
           .limit(8),
         supabase
           .from("outfit_plans")
-          .select("outfit_id, outfits(name, outfit_items(item_id, wardrobe_items(image_url)))")
+          .select("outfit_id, outfits(name, outfit_items(item_id, wardrobe_items(image_url, ai_image_url, use_ai_image)))")
           .eq("planned_date", today)
           .maybeSingle(),
         supabase
           .from("outfits")
-          .select("id, name, outfit_items(wardrobe_items(image_url))")
+          .select("id, name, outfit_items(wardrobe_items(image_url, ai_image_url, use_ai_image))")
           .order("created_at", { ascending: false })
           .limit(4),
       ]);
       const paths: string[] = [];
-      items?.forEach((i) => i.image_url && paths.push(i.image_url));
+      items?.forEach((i) => i.image_url && paths.push(displayPath(i)));
       (plan as any)?.outfits?.outfit_items?.forEach((oi: any) =>
-        oi.wardrobe_items?.image_url && paths.push(oi.wardrobe_items.image_url),
+        oi.wardrobe_items && paths.push(displayPath(oi.wardrobe_items)),
       );
       recent?.forEach((o: any) =>
-        o.outfit_items?.forEach((oi: any) => oi.wardrobe_items?.image_url && paths.push(oi.wardrobe_items.image_url)),
+        o.outfit_items?.forEach((oi: any) => oi.wardrobe_items && paths.push(displayPath(oi.wardrobe_items))),
       );
       const urls = await signedUrlsMap(paths);
       return { items: items ?? [], plan, recent: recent ?? [], urls };
@@ -89,7 +89,7 @@ function Home() {
               {(data?.plan as any).outfits.outfit_items?.map((oi: any, i: number) => (
                 <img
                   key={i}
-                  src={data?.urls[oi.wardrobe_items?.image_url] ?? ""}
+                  src={data?.urls[oi.wardrobe_items ? displayPath(oi.wardrobe_items) : ""] ?? ""}
                   className="h-24 w-24 rounded-2xl bg-secondary object-cover"
                   alt=""
                 />
@@ -115,8 +115,8 @@ function Home() {
                 className="overflow-hidden rounded-2xl bg-secondary"
               >
                 <div className="aspect-square bg-secondary">
-                  {data.urls[it.image_url] && (
-                    <img src={data.urls[it.image_url]} alt="" className="h-full w-full object-cover" />
+                  {data.urls[displayPath(it)] && (
+                    <img src={data.urls[displayPath(it)]} alt="" className="h-full w-full object-cover" />
                   )}
                 </div>
                 <div className="p-2 text-center text-sm">{categoryLabel(it.category)}</div>
@@ -151,8 +151,8 @@ function Home() {
                 <div className="grid grid-cols-2 gap-1">
                   {o.outfit_items?.slice(0, 4).map((oi: any, i: number) => (
                     <div key={i} className="aspect-square overflow-hidden rounded-md bg-card">
-                      {oi.wardrobe_items?.image_url && data.urls[oi.wardrobe_items.image_url] && (
-                        <img src={data.urls[oi.wardrobe_items.image_url]} className="h-full w-full object-cover" alt="" />
+                      {oi.wardrobe_items && data.urls[displayPath(oi.wardrobe_items)] && (
+                        <img src={data.urls[displayPath(oi.wardrobe_items)]} className="h-full w-full object-cover" alt="" />
                       )}
                     </div>
                   ))}

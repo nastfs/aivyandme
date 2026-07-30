@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
-import { signedUrlsMap } from "@/lib/storage";
+import { signedUrlsMap, displayPath } from "@/lib/storage";
 import { categoryLabel } from "@/lib/categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,9 +36,9 @@ function NewOutfit() {
     queryFn: async () => {
       const { data: items } = await supabase
         .from("wardrobe_items")
-        .select("id, image_url, category, name")
+        .select("id, image_url, ai_image_url, use_ai_image, category, name")
         .order("category");
-      const urls = await signedUrlsMap((items ?? []).map((i) => i.image_url));
+      const urls = await signedUrlsMap((items ?? []).map((i) => displayPath(i)));
       return { items: items ?? [], urls };
     },
   });
@@ -133,8 +133,8 @@ function NewOutfit() {
                         on ? "border-primary" : "border-transparent",
                       )}
                     >
-                      {data?.urls[it.image_url] && (
-                        <img src={data.urls[it.image_url]} alt={it.name ?? ""} className="h-full w-full object-cover" />
+                      {data?.urls[displayPath(it)] && (
+                        <img src={data.urls[displayPath(it)]} alt={it.name ?? ""} className="h-full w-full object-cover" />
                       )}
                       {on && (
                         <div className="absolute right-1 top-1 rounded-full bg-primary p-1 text-primary-foreground">

@@ -9,7 +9,7 @@ import { CATEGORIES, type CategoryValue } from "@/lib/categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ChevronLeft, Sparkles, Trash2, Shirt } from "lucide-react";
+import { ChevronLeft, Sparkles, Trash2, Shirt, Check } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/wardrobe/$id")({
@@ -34,18 +34,20 @@ function ItemDetail() {
   const [saving, setSaving] = useState(false);
   const [smoothing, setSmoothing] = useState(false);
   const [preview, setPreview] = useState<string>("");
+  const [slide, setSlide] = useState(0);
 
   const { data } = useQuery({
     queryKey: ["wardrobe-item", id],
     queryFn: async () => {
       const { data: item, error } = await supabase
         .from("wardrobe_items")
-        .select("id, image_url, category, name, color")
+        .select("id, image_url, ai_image_url, use_ai_image, category, name, color")
         .eq("id", id)
         .single();
       if (error) throw error;
       const url = await signedUrl(item.image_url);
-      return { item, url };
+      const aiUrl = item.ai_image_url ? await signedUrl(item.ai_image_url) : null;
+      return { item, url, aiUrl };
     },
   });
 
@@ -116,7 +118,10 @@ function ItemDetail() {
         .from("wardrobe")
         .upload(path, blob, { contentType: "image/png" });
       if (upErr) throw upErr;
-      const { error } = await supabase.from("wardrobe_items").update({ image_url: path }).eq("id", id);
+      const { error } = await supabase
+        .from("wardrobe_items")
+        .update({ ai_image_url: path, use_ai_image: true })
+        .eq("id", id);
       if (error) throw error;
       setPreview("");
       toast.success("Neues Bild übernommen");
@@ -126,6 +131,15 @@ function ItemDetail() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function toggleUseAi() {
+    if (!data?.item) return;
+    const next = !(data.item.use_ai_image !== false);
+    const { error } = await supabase.from("wardrobe_items").update({ use_ai_image: next }).eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success(next ? "KI-Bild wird angezeigt" : "Originalbild wird angezeigt");
+    qc.invalidateQueries();
   }
 
   return (
@@ -141,15 +155,78 @@ function ItemDetail() {
       </header>
 
       <div className="mb-4 rounded-3xl bg-card p-4 shadow-sm">
-        <div className="overflow-hidden rounded-2xl bg-secondary">
-          {(preview || data?.url) && (
-            <img
-              src={preview || data?.url}
-              alt={name}
-              className={`max-h-96 w-full object-contain transition ${smoothing ? "opacity-50 blur-sm" : ""}`}
-            />
-          )}
-        </div>
+        {preview ? (
+          <div className="overflow-hidden rounded-2xl bg-secondary">
+            <img src={preview} alt={name} className="max-h-96 w-full object-contain" />
+          </div>
+        ) : (
+          (() => {
+            const useAi = data?.item?.use_ai_image !== false;
+            const slides = [
+              ...(data?.aiUrl ? [{ url: data.aiUrl, label: "KI-Bild" }] : []),
+              ...(data?.url ? [{ url: data.url, label: "Originalfoto" }] : []),
+            ];
+            if (!useAi) slides.reverse();
+            const idx = Math.min(slide, Math.max(slides.length - 1, 0));
+            return (
+              <>
+                <div
+                  className="flex snap-x snap-mandatory gap-3 overflow-x-auto rounded-2xl"
+                  onScroll={(e) => {
+                    const el = e.currentTarget;
+                    setSlide(Math.round(el.scrollLeft / Math.max(el.clientWidth, 1)));
+                  }}
+                >
+                  {slides.map((s) => (
+                    <img
+                      key={s.url}
+                      src={s.url}
+                      alt={name}
+                      className={`max-h-96 w-full shrink-0 snap-center rounded-2xl bg-secondary object-contain transition ${
+                        smoothing ? "opacity-50 blur-sm" : ""
+                      }`}
+                    />
+                  ))}
+                </div>
+                {slides.length > 1 && (
+                  <div className="mt-2 flex items-center justify-center gap-2">
+                    {slides.map((s, i) => (
+                      <span
+                        key={s.url}
+                        className={`h-1.5 rounded-full transition-all ${
+                          i === idx ? "w-5 bg-primary" : "w-1.5 bg-border"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
+                <p className="mt-2 text-center text-xs text-muted-foreground">
+                  {slides[idx]?.label}
+                  {slides.length > 1 ? " · wische für weitere Bilder" : ""}
+                </p>
+              </>
+            );
+          })()
+        )}
+
+        {data?.aiUrl && !preview && (
+          <button
+            type="button"
+            onClick={toggleUseAi}
+            className="mt-3 flex w-full items-center gap-3 rounded-2xl border border-border px-4 py-3 text-left text-sm"
+          >
+            <span
+              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+                data.item.use_ai_image === false
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border"
+              }`}
+            >
+              {data.item.use_ai_image === false && <Check className="h-3.5 w-3.5" />}
+            </span>
+            Originalbild behalten
+          </button>
+        )}
 
         {preview ? (
           <div className="mt-3 grid grid-cols-2 gap-2">
@@ -159,7 +236,7 @@ function ItemDetail() {
         ) : (
           <Button variant="outline" className="mt-3 w-full" onClick={onSmooth} disabled={smoothing}>
             <Sparkles className="mr-2 h-4 w-4" />
-            {smoothing ? "KI glättet das Bild…" : "Bild mit KI glätten"}
+            {smoothing ? "KI glättet das Bild…" : data?.aiUrl ? "KI-Bild neu erzeugen" : "Bild mit KI glätten"}
           </Button>
         )}
         <p className="mt-2 text-center text-xs text-muted-foreground">

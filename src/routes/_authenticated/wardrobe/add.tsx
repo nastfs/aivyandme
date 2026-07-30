@@ -2,12 +2,12 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { classifyItem } from "@/lib/wardrobe.functions";
+import { classifyItem, smoothItemImage } from "@/lib/wardrobe.functions";
 import { CATEGORIES, type CategoryValue } from "@/lib/categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, ImagePlus, Sparkles } from "lucide-react";
+import { X, ImagePlus, Sparkles, Check } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/wardrobe/add")({
@@ -23,9 +23,13 @@ export const Route = createFileRoute("/_authenticated/wardrobe/add")({
 function AddItem() {
   const navigate = useNavigate();
   const classify = useServerFn(classifyItem);
+  const smooth = useServerFn(smoothItemImage);
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [dataUrl, setDataUrl] = useState<string>("");
+  const [aiDataUrl, setAiDataUrl] = useState<string>("");
+  const [keepOriginal, setKeepOriginal] = useState(false);
+  const [smoothing, setSmoothing] = useState(false);
   const [category, setCategory] = useState<CategoryValue>("sonstiges");
   const [name, setName] = useState("");
   const [color, setColor] = useState("");
@@ -34,11 +38,23 @@ function AddItem() {
 
   async function onFile(f: File) {
     setFile(f);
+    setAiDataUrl("");
+    setKeepOriginal(false);
     const reader = new FileReader();
     reader.onload = async () => {
       const url = reader.result as string;
       setDataUrl(url);
       setAnalyzing(true);
+      setSmoothing(true);
+      // KI-Glättung läuft automatisch parallel zur Erkennung
+      smooth({ data: { imageDataUrl: url } })
+        .then(({ b64 }) => setAiDataUrl(`data:image/png;base64,${b64}`))
+        .catch(() =>
+          toast.error("KI-Glättung fehlgeschlagen", {
+            description: "Das Originalbild wird verwendet.",
+          }),
+        )
+        .finally(() => setSmoothing(false));
       try {
         const result = await classify({ data: { imageDataUrl: url } });
         setCategory(result.category as CategoryValue);
@@ -66,9 +82,23 @@ function AddItem() {
         contentType: file.type,
       });
       if (upErr) throw upErr;
+
+      // KI-Bild zusätzlich speichern — das Original bleibt immer erhalten
+      let aiPath: string | null = null;
+      if (aiDataUrl) {
+        const blob = await (await fetch(aiDataUrl)).blob();
+        const p = `${uid}/${crypto.randomUUID()}.png`;
+        const { error: aiErr } = await supabase.storage
+          .from("wardrobe")
+          .upload(p, blob, { contentType: "image/png" });
+        if (!aiErr) aiPath = p;
+      }
+
       const { error: insErr } = await supabase.from("wardrobe_items").insert({
         user_id: uid,
         image_url: path,
+        ai_image_url: aiPath,
+        use_ai_image: !keepOriginal,
         category,
         name: name || null,
         color: color || null,
@@ -99,7 +129,41 @@ function AddItem() {
 
       <div className="mb-6 rounded-3xl bg-card p-4 shadow-sm">
         {dataUrl ? (
-          <img src={dataUrl} alt="" className="mx-auto max-h-64 rounded-2xl object-contain" />
+          <>
+            <img
+              src={!keepOriginal && aiDataUrl ? aiDataUrl : dataUrl}
+              alt=""
+              className={`mx-auto max-h-64 rounded-2xl object-contain transition ${
+                smoothing && !keepOriginal ? "opacity-50 blur-sm" : ""
+              }`}
+            />
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              {smoothing
+                ? "KI glättet dein Foto…"
+                : keepOriginal
+                  ? "Originalfoto"
+                  : aiDataUrl
+                    ? "KI-geglättetes Bild"
+                    : "Originalfoto"}
+            </p>
+            <button
+              type="button"
+              onClick={() => setKeepOriginal((v) => !v)}
+              className="mt-3 flex w-full items-center gap-3 rounded-2xl border border-border px-4 py-3 text-left text-sm"
+            >
+              <span
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+                  keepOriginal ? "border-primary bg-primary text-primary-foreground" : "border-border"
+                }`}
+              >
+                {keepOriginal && <Check className="h-3.5 w-3.5" />}
+              </span>
+              Originalbild behalten
+            </button>
+            <p className="mt-1 text-center text-xs text-muted-foreground">
+              Beide Bilder werden gespeichert — du kannst später wechseln.
+            </p>
+          </>
         ) : (
           <button
             onClick={() => fileRef.current?.click()}

@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { signedUrlsMap } from "@/lib/storage";
+import { signedUrlsMap, displayPath } from "@/lib/storage";
 import { CATEGORIES, categoryLabel, type CategoryValue } from "@/lib/categories";
 import { Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -25,10 +25,10 @@ function Wardrobe() {
     queryFn: async () => {
       const { data: items, error } = await supabase
         .from("wardrobe_items")
-        .select("id, image_url, category, name, color, created_at")
+        .select("id, image_url, ai_image_url, use_ai_image, category, name, color, created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      const urls = await signedUrlsMap((items ?? []).map((i) => i.image_url));
+      const urls = await signedUrlsMap((items ?? []).map((i) => displayPath(i)));
       return { items: items ?? [], urls };
     },
   });
@@ -100,8 +100,8 @@ function Wardrobe() {
                 className="block overflow-hidden rounded-2xl bg-card shadow-sm"
               >
                 <div className="aspect-square bg-secondary">
-                  {data?.urls[it.image_url] && (
-                    <img src={data.urls[it.image_url]} alt={it.name ?? ""} className="h-full w-full object-cover" />
+                  {data?.urls[displayPath(it)] && (
+                    <img src={data.urls[displayPath(it)]} alt={it.name ?? ""} className="h-full w-full object-cover" />
                   )}
                 </div>
                 <div className="p-3">
