@@ -212,8 +212,10 @@ export const detectItems = createServerFn({ method: "POST" })
 /** Korrigiert Name/Kategorie/Farbe anhand einer Nutzerbeschreibung ("falsch erkannt"). */
 export const refineItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { correction: string; name?: string; category?: string; color?: string }) => {
-    if (!data?.correction?.trim()) throw new Error("Bitte kurz beschreiben, was es wirklich ist");
+  .inputValidator((data: { correction?: string; imageDataUrl?: string; name?: string; category?: string; color?: string }) => {
+    if (!data?.correction?.trim() && !data?.imageDataUrl?.startsWith("data:image/")) {
+      throw new Error("Bitte kurz beschreiben oder ein Bild anhängen");
+    }
     return data;
   })
   .handler(async ({ data }): Promise<{ name: string; category: Cat; color: string }> => {
@@ -224,6 +226,18 @@ export const refineItem = createServerFn({ method: "POST" })
     };
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) return fallback;
+
+    const userContent: any[] = [
+      {
+        type: "text",
+        text: `Bisher erkannt: Name "${data.name ?? ""}", Kategorie "${data.category ?? ""}", Farbe "${data.color ?? ""}". ${
+          data.correction ? `Korrektur der Nutzerin: "${data.correction}".` : ""
+        }${data.imageDataUrl ? " Die Nutzerin hat zusätzlich ein Einzelfoto genau dieses Teils angehängt — richte dich in erster Linie danach." : ""} Gib die korrigierten Werte zurück.`,
+      },
+    ];
+    if (data.imageDataUrl) {
+      userContent.push({ type: "image_url", image_url: { url: data.imageDataUrl } });
+    }
 
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -236,10 +250,7 @@ export const refineItem = createServerFn({ method: "POST" })
             content:
               "Du bist ein Fashion-Assistent. Die Nutzerin korrigiert eine falsche Erkennung. Antworte AUSSCHLIESSLICH mit JSON: {\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|taschen|accessoires|sport|sonstiges\",\"name\":\"kurzer deutscher Name\",\"color\":\"Hauptfarbe deutsch\"}. Kein Markdown.",
           },
-          {
-            role: "user",
-            content: `Bisher erkannt: Name "${data.name ?? ""}", Kategorie "${data.category ?? ""}", Farbe "${data.color ?? ""}". Korrektur der Nutzerin: "${data.correction}". Gib die korrigierten Werte zurück.`,
-          },
+          { role: "user", content: userContent },
         ],
       }),
     });
