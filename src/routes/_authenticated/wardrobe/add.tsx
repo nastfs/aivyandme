@@ -2,12 +2,12 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { classifyItem } from "@/lib/wardrobe.functions";
+import { classifyItem, smoothItemImage } from "@/lib/wardrobe.functions";
 import { CATEGORIES, type CategoryValue } from "@/lib/categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, ImagePlus, Sparkles } from "lucide-react";
+import { X, ImagePlus, Sparkles, Check } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/wardrobe/add")({
@@ -23,9 +23,13 @@ export const Route = createFileRoute("/_authenticated/wardrobe/add")({
 function AddItem() {
   const navigate = useNavigate();
   const classify = useServerFn(classifyItem);
+  const smooth = useServerFn(smoothItemImage);
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [dataUrl, setDataUrl] = useState<string>("");
+  const [aiDataUrl, setAiDataUrl] = useState<string>("");
+  const [keepOriginal, setKeepOriginal] = useState(false);
+  const [smoothing, setSmoothing] = useState(false);
   const [category, setCategory] = useState<CategoryValue>("sonstiges");
   const [name, setName] = useState("");
   const [color, setColor] = useState("");
@@ -34,11 +38,23 @@ function AddItem() {
 
   async function onFile(f: File) {
     setFile(f);
+    setAiDataUrl("");
+    setKeepOriginal(false);
     const reader = new FileReader();
     reader.onload = async () => {
       const url = reader.result as string;
       setDataUrl(url);
       setAnalyzing(true);
+      setSmoothing(true);
+      // KI-Glättung läuft automatisch parallel zur Erkennung
+      smooth({ data: { imageDataUrl: url } })
+        .then(({ b64 }) => setAiDataUrl(`data:image/png;base64,${b64}`))
+        .catch(() =>
+          toast.error("KI-Glättung fehlgeschlagen", {
+            description: "Das Originalbild wird verwendet.",
+          }),
+        )
+        .finally(() => setSmoothing(false));
       try {
         const result = await classify({ data: { imageDataUrl: url } });
         setCategory(result.category as CategoryValue);
@@ -66,9 +82,23 @@ function AddItem() {
         contentType: file.type,
       });
       if (upErr) throw upErr;
+
+      // KI-Bild zusätzlich speichern — das Original bleibt immer erhalten
+      let aiPath: string | null = null;
+      if (aiDataUrl) {
+        const blob = await (await fetch(aiDataUrl)).blob();
+        const p = `${uid}/${crypto.randomUUID()}.png`;
+        const { error: aiErr } = await supabase.storage
+          .from("wardrobe")
+          .upload(p, blob, { contentType: "image/png" });
+        if (!aiErr) aiPath = p;
+      }
+
       const { error: insErr } = await supabase.from("wardrobe_items").insert({
         user_id: uid,
         image_url: path,
+        ai_image_url: aiPath,
+        use_ai_image: !keepOriginal,
         category,
         name: name || null,
         color: color || null,
