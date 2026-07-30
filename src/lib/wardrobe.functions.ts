@@ -8,7 +8,7 @@ type Cat = (typeof ALLOWED)[number];
 
 export const smoothItemImage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { imageDataUrl: string; focus?: string; category?: string; view?: "top" | "side" }) => {
+  .inputValidator((data: { imageDataUrl: string; focus?: string; category?: string; view?: "top" | "side"; correction?: string }) => {
     if (!data?.imageDataUrl?.startsWith("data:image/")) {
       throw new Error("imageDataUrl muss eine Data-URL sein");
     }
@@ -20,6 +20,9 @@ export const smoothItemImage = createServerFn({ method: "POST" })
 
     const personRule =
       " Falls eine Person das Teil trägt: extrahiere nur das Kleidungsstück selbst und entferne Person, Haut, Haare und Körperteile vollständig; ergänze verdeckte Bereiche plausibel, ohne Schnitt, Farbe oder Muster zu verändern.";
+    const correctionRule = data.correction
+      ? ` WICHTIGE KORREKTUR DER NUTZERIN (hat Vorrang vor deiner eigenen Interpretation): "${data.correction}". Stelle das Teil exakt so dar, wie hier beschrieben (z. B. Art des Teils, Ausschnitt, Länge, Öffnung/Knopfleiste), und übernimm dabei Farbe, Material und Muster aus dem Foto.`
+      : "";
     const shoeRule =
       data.category === "schuhe"
         ? data.view === "side"
@@ -47,6 +50,7 @@ export const smoothItemImage = createServerFn({ method: "POST" })
                     : "") +
                   "Erzeuge ein professionelles E-Commerce-Produktfoto (Stockfoto-Look) des Kleidungsstücks. Entferne den kompletten Hintergrund und ersetze ihn durch einen komplett gleichmäßigen, reinweißen Studio-Hintergrund ohne Schatten, Textur, Möbel oder Raumdetails. Entferne Hände, Arme, Personen, Kleiderbügel und alles andere, was das Teil hält. Zeige das Teil freigestellt, mittig, gerade ausgerichtet und flach/glatt liegend wie im Online-Shop-Katalog, mit weichem, gleichmäßigem Studiolicht und scharfen sauberen Kanten. Wichtig: Das Kleidungsstück selbst darf NICHT verändert oder verschönert werden — Schnitt, Proportionen, Farbe, Muster, Material, Gebrauchsspuren, Flecken und Knötchen müssen exakt erhalten bleiben. Nur Halte-Falten glätten und den Hintergrund entfernen." +
                   personRule +
+                  correctionRule +
                   shoeRule,
               },
               { type: "image_url", image_url: { url: data.imageDataUrl } },
