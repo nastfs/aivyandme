@@ -1,0 +1,1 @@
+ALTER TABLE public.wardrobe_items ADD COLUMN IF NOT EXISTS ai_image_url_2 text;
