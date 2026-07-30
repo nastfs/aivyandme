@@ -307,7 +307,10 @@ function AddItem() {
       {cropping && rawUrl && (
         <ImageCropper
           src={rawUrl}
-          onCancel={() => setCropping(false)}
+          onCancel={() => {
+            setCropping(false);
+            if (!dataUrl) analyze(rawUrl);
+          }}
           onDone={(url) => {
             setCropping(false);
             analyze(url);
@@ -369,6 +372,13 @@ function AddItem() {
               ? `${drafts.filter((d) => d.include).length} von ${drafts.length} Teilen werden angelegt`
               : "Passt das? Ändere gerne noch:"}
         </div>
+      )}
+
+      {dataUrl && !analyzing && drafts.length === 0 && (
+        <Button variant="outline" onClick={() => analyze(dataUrl)} className="mb-4 w-full">
+          <Sparkles className="mr-2 h-4 w-4" />
+          Teile erkennen
+        </Button>
       )}
 
       <div className="space-y-4">
@@ -579,13 +589,15 @@ function AddItem() {
       </Dialog>
 
       {drafts.length > 0 && (
-        <Button onClick={onSave} disabled={saving || analyzing} className="mt-6 w-full">
-          {saving
-            ? "Speichern…"
-            : multi
-              ? `${drafts.filter((d) => d.include).length} Teile zum Kleiderschrank hinzufügen`
-              : "Zum Kleiderschrank hinzufügen"}
-        </Button>
+        <div className="sticky bottom-4 z-10 mt-6">
+          <Button onClick={onSave} disabled={saving || analyzing} className="w-full shadow-lg">
+            {saving
+              ? "Speichern…"
+              : multi
+                ? `${drafts.filter((d) => d.include).length} Teile zum Kleiderschrank hinzufügen`
+                : "Zum Kleiderschrank hinzufügen"}
+          </Button>
+        </div>
       )}
     </div>
   );
