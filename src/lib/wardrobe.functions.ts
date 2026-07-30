@@ -113,3 +113,67 @@ export const classifyItem = createServerFn({ method: "POST" })
       return { category: "sonstiges" as Cat, name: "Neues Teil", color: "" };
     }
   });
+export type DetectedItem = {
+  category: Cat;
+  name: string;
+  color: string;
+  description: string;
+};
+
+/** Erkennt ALLE Kleidungsstücke auf einem Foto (z. B. Gruppenfoto mehrerer Teile). */
+export const detectItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { imageDataUrl: string }) => {
+    if (!data?.imageDataUrl?.startsWith("data:image/")) {
+      throw new Error("imageDataUrl muss eine Data-URL sein");
+    }
+    return data;
+  })
+  .handler(async ({ data }): Promise<{ items: DetectedItem[] }> => {
+    const fallback = {
+      items: [
+        { category: "sonstiges" as Cat, name: "Neues Teil", color: "", description: "das Kleidungsstück" },
+      ],
+    };
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) return fallback;
+
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Du bist ein Fashion-Assistent. Erkenne ALLE einzelnen Kleidungsstücke/Accessoires auf dem Foto (auch wenn mehrere Teile nebeneinander liegen). Antworte AUSSCHLIESSLICH mit JSON: {\"items\":[{\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|taschen|sport|sonstiges\",\"name\":\"kurzer deutscher Name\",\"color\":\"Hauptfarbe deutsch\",\"description\":\"eindeutige visuelle Beschreibung inkl. Position im Bild, z.B. 'die beige Leinenhose links unten'\"}]}. Ein Paar Schuhe zählt als ein Teil. Kein Fließtext, kein Markdown.",
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Welche Kleidungsstücke sind auf diesem Foto?" },
+              { type: "image_url", image_url: { url: data.imageDataUrl } },
+            ],
+          },
+        ],
+      }),
+    });
+    if (!res.ok) return fallback;
+
+    const json = await res.json();
+    const raw: string = json?.choices?.[0]?.message?.content ?? "";
+    try {
+      const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
+      const list = Array.isArray(parsed?.items) ? parsed.items : [];
+      const items: DetectedItem[] = list.slice(0, 12).map((p: any) => ({
+        category: ALLOWED.includes(p?.category) ? (p.category as Cat) : "sonstiges",
+        name: typeof p?.name === "string" ? p.name.slice(0, 60) : "Neues Teil",
+        color: typeof p?.color === "string" ? p.color.slice(0, 40) : "",
+        description: typeof p?.description === "string" ? p.description.slice(0, 200) : "",
+      }));
+      return items.length ? { items } : fallback;
+    } catch {
+      return fallback;
+    }
+  });
