@@ -126,12 +126,17 @@ export type DetectedItem = {
   name: string;
   color: string;
   description: string;
+  /** id eines bereits vorhandenen Teils, das die KI für identisch hält */
+  matchId?: string | null;
+  matchName?: string | null;
 };
+
+type ExistingItem = { id: string; name: string; category: string; color: string };
 
 /** Erkennt ALLE Kleidungsstücke auf einem Foto (z. B. Gruppenfoto mehrerer Teile). */
 export const detectItems = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { imageDataUrl: string }) => {
+  .inputValidator((data: { imageDataUrl: string; existing?: ExistingItem[] }) => {
     if (!data?.imageDataUrl?.startsWith("data:image/")) {
       throw new Error("imageDataUrl muss eine Data-URL sein");
     }
@@ -146,6 +151,11 @@ export const detectItems = createServerFn({ method: "POST" })
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) return fallback;
 
+    const existing = (data.existing ?? []).slice(0, 120);
+    const existingBlock = existing.length
+      ? `\n\nBereits im Schrank vorhandene Teile (JSON): ${JSON.stringify(existing)}. Wenn ein erkanntes Teil sehr wahrscheinlich eines dieser vorhandenen Teile IST (gleiche Art, Farbe, Muster), setze "matchId" auf dessen id. Sonst setze "matchId" auf null. Sei eher zurückhaltend: nur bei klarer Ähnlichkeit einen Match setzen.`
+      : "";
+
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -155,12 +165,13 @@ export const detectItems = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "Du bist ein Fashion-Assistent. Erkenne ALLE einzelnen Kleidungsstücke/Accessoires auf dem Foto (auch wenn mehrere Teile nebeneinander liegen). Antworte AUSSCHLIESSLICH mit JSON: {\"items\":[{\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|taschen|sport|sonstiges\",\"name\":\"kurzer deutscher Name\",\"color\":\"Hauptfarbe deutsch\",\"description\":\"eindeutige visuelle Beschreibung inkl. Position im Bild, z.B. 'die beige Leinenhose links unten'\"}]}. Ein Paar Schuhe zählt als ein Teil. Kein Fließtext, kein Markdown.",
+              "Du bist ein Fashion-Assistent. Erkenne ALLE einzelnen Kleidungsstücke und Accessoires auf dem Foto. Das Foto kann (a) einzelne Teile flach liegend, (b) mehrere Teile nebeneinander oder (c) eine Person zeigen, die ein komplettes Outfit trägt. Bei getragenen Outfits: erkenne jedes getragene Teil einzeln (Oberteil, Hose/Rock, Kleid, Jacke/Blazer, Schuhe, Tasche) und auch Accessoires wie Sonnenbrillen, Mützen/Hüte/Caps, Schals, Gürtel, auffälligen Schmuck — Accessoires bekommen die Kategorie \"accessoires\". Ignoriere die Person selbst, Körperteile, Haare und den Hintergrund. Antworte AUSSCHLIESSLICH mit JSON: {\"items\":[{\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|taschen|accessoires|sport|sonstiges\",\"name\":\"kurzer deutscher Name\",\"color\":\"Hauptfarbe deutsch\",\"description\":\"eindeutige visuelle Beschreibung inkl. Position, z.B. 'der beige Strickpulli, den die Person oben trägt'\",\"matchId\":null}]}. Ein Paar Schuhe zählt als ein Teil. Kein Fließtext, kein Markdown." +
+              existingBlock,
           },
           {
             role: "user",
             content: [
-              { type: "text", text: "Welche Kleidungsstücke sind auf diesem Foto?" },
+              { type: "text", text: "Welche Kleidungsstücke und Accessoires sind auf diesem Foto?" },
               { type: "image_url", image_url: { url: data.imageDataUrl } },
             ],
           },
@@ -174,12 +185,17 @@ export const detectItems = createServerFn({ method: "POST" })
     try {
       const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
       const list = Array.isArray(parsed?.items) ? parsed.items : [];
-      const items: DetectedItem[] = list.slice(0, 12).map((p: any) => ({
-        category: ALLOWED.includes(p?.category) ? (p.category as Cat) : "sonstiges",
-        name: typeof p?.name === "string" ? p.name.slice(0, 60) : "Neues Teil",
-        color: typeof p?.color === "string" ? p.color.slice(0, 40) : "",
-        description: typeof p?.description === "string" ? p.description.slice(0, 200) : "",
-      }));
+      const items: DetectedItem[] = list.slice(0, 12).map((p: any) => {
+        const match = existing.find((e) => e.id === p?.matchId);
+        return {
+          category: ALLOWED.includes(p?.category) ? (p.category as Cat) : "sonstiges",
+          name: typeof p?.name === "string" ? p.name.slice(0, 60) : "Neues Teil",
+          color: typeof p?.color === "string" ? p.color.slice(0, 40) : "",
+          description: typeof p?.description === "string" ? p.description.slice(0, 200) : "",
+          matchId: match ? match.id : null,
+          matchName: match ? match.name : null,
+        };
+      });
       return items.length ? { items } : fallback;
     } catch {
       return fallback;
