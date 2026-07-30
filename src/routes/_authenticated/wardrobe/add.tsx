@@ -4,10 +4,11 @@ import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { detectItems, smoothItemImage } from "@/lib/wardrobe.functions";
 import { CATEGORIES, type CategoryValue } from "@/lib/categories";
+import { ImageCropper } from "@/components/ImageCropper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X, ImagePlus, Sparkles, Check } from "lucide-react";
+import { X, ImagePlus, Sparkles, Check, Crop } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/wardrobe/add")({
@@ -17,7 +18,8 @@ export const Route = createFileRoute("/_authenticated/wardrobe/add")({
       { title: "Neues Teil — Aivy & Me" },
       {
         name: "description",
-        content: "Neue Kleidungsstücke hinzufügen — auch mehrere auf einem Foto, automatisch erkannt.",
+        content:
+          "Kleidungsstücke hinzufügen — Foto zuschneiden, getragene Outfits automatisch erkennen, Duplikate abgleichen.",
       },
     ],
   }),
@@ -34,6 +36,8 @@ type Draft = {
   smoothing: boolean;
   keepOriginal: boolean;
   include: boolean;
+  matchName: string | null;
+  duplicateDecided: boolean;
 };
 
 function AddItem() {
@@ -41,7 +45,8 @@ function AddItem() {
   const detect = useServerFn(detectItems);
   const smooth = useServerFn(smoothItemImage);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
+  const [rawUrl, setRawUrl] = useState("");
+  const [cropping, setCropping] = useState(false);
   const [dataUrl, setDataUrl] = useState("");
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
@@ -51,81 +56,92 @@ function AddItem() {
     setDrafts((ds) => ds.map((d) => (d.key === key ? { ...d, ...changes } : d)));
   }
 
-  async function onFile(f: File) {
-    setFile(f);
+  function onFile(f: File) {
     setDrafts([]);
+    setDataUrl("");
     const reader = new FileReader();
-    reader.onload = async () => {
-      const url = reader.result as string;
-      setDataUrl(url);
-      setAnalyzing(true);
-      try {
-        const { items } = await detect({ data: { imageDataUrl: url } });
-        const next: Draft[] = items.map((it, i) => ({
-          key: `${i}-${it.name}`,
-          name: it.name,
-          color: it.color,
-          category: it.category as CategoryValue,
-          description: it.description,
-          aiDataUrl: "",
-          aiDataUrl2: "",
-          smoothing: true,
-          keepOriginal: false,
-          include: true,
-        }));
-        setDrafts(next);
-        toast.success(
-          items.length > 1 ? `${items.length} Teile erkannt` : "Teil erkannt",
-          { description: items.map((i) => i.name).join(", ") },
-        );
-        // KI-Bilder für jedes Teil automatisch erzeugen
-        next.forEach((d) => {
-          const focus = next.length > 1 ? d.description || d.name : undefined;
-          smooth({
-            data: {
-              imageDataUrl: url,
-              focus,
-              category: d.category,
-              view: "top",
-            },
-          })
-            .then(({ b64 }) => patch(d.key, { aiDataUrl: `data:image/png;base64,${b64}`, smoothing: false }))
-            .catch(() => {
-              patch(d.key, { smoothing: false });
-              toast.error(`KI-Bild für „${d.name}" fehlgeschlagen`, {
-                description: "Das Originalfoto wird verwendet.",
-              });
-            });
-
-          // Schuhe bekommen zusätzlich ein zweites Bild in Seitenansicht
-          if (d.category === "schuhe") {
-            smooth({ data: { imageDataUrl: url, focus, category: "schuhe", view: "side" } })
-              .then(({ b64 }) => patch(d.key, { aiDataUrl2: `data:image/png;base64,${b64}` }))
-              .catch(() => {});
-          }
-        });
-      } catch (e: any) {
-        toast.error("Automatische Erkennung fehlgeschlagen", { description: e.message });
-      } finally {
-        setAnalyzing(false);
-      }
+    reader.onload = () => {
+      setRawUrl(reader.result as string);
+      setCropping(true);
     };
     reader.readAsDataURL(f);
   }
 
+  async function analyze(url: string) {
+    setDataUrl(url);
+    setAnalyzing(true);
+    try {
+      const { data: existingRows } = await supabase
+        .from("wardrobe_items")
+        .select("id, name, category, color")
+        .order("created_at", { ascending: false })
+        .limit(120);
+      const existing = (existingRows ?? []).map((r) => ({
+        id: r.id,
+        name: r.name ?? "",
+        category: r.category as string,
+        color: r.color ?? "",
+      }));
+
+      const { items } = await detect({ data: { imageDataUrl: url, existing } });
+      const next: Draft[] = items.map((it, i) => ({
+        key: `${i}-${it.name}`,
+        name: it.name,
+        color: it.color,
+        category: it.category as CategoryValue,
+        description: it.description,
+        aiDataUrl: "",
+        aiDataUrl2: "",
+        smoothing: true,
+        keepOriginal: false,
+        include: !it.matchName,
+        matchName: it.matchName ?? null,
+        duplicateDecided: false,
+      }));
+      setDrafts(next);
+      toast.success(items.length > 1 ? `${items.length} Teile erkannt` : "Teil erkannt", {
+        description: items.map((i) => i.name).join(", "),
+      });
+
+      next.forEach((d) => {
+        const focus = next.length > 1 ? d.description || d.name : undefined;
+        smooth({ data: { imageDataUrl: url, focus, category: d.category, view: "top" } })
+          .then(({ b64 }) =>
+            patch(d.key, { aiDataUrl: `data:image/png;base64,${b64}`, smoothing: false }),
+          )
+          .catch(() => {
+            patch(d.key, { smoothing: false });
+            toast.error(`KI-Bild für „${d.name}" fehlgeschlagen`, {
+              description: "Das Originalfoto wird verwendet.",
+            });
+          });
+
+        if (d.category === "schuhe") {
+          smooth({ data: { imageDataUrl: url, focus, category: "schuhe", view: "side" } })
+            .then(({ b64 }) => patch(d.key, { aiDataUrl2: `data:image/png;base64,${b64}` }))
+            .catch(() => {});
+        }
+      });
+    } catch (e: any) {
+      toast.error("Automatische Erkennung fehlgeschlagen", { description: e.message });
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
   async function onSave() {
-    if (!file) return;
+    if (!dataUrl) return;
     const chosen = drafts.filter((d) => d.include);
     if (!chosen.length) return toast.error("Wähle mindestens ein Teil aus");
     setSaving(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
       const uid = userData.user!.id;
-      const ext = file.name.split(".").pop() || "jpg";
-      const originalPath = `${uid}/${crypto.randomUUID()}.${ext}`;
+      const originalBlob = await (await fetch(dataUrl)).blob();
+      const originalPath = `${uid}/${crypto.randomUUID()}.jpg`;
       const { error: upErr } = await supabase.storage
         .from("wardrobe")
-        .upload(originalPath, file, { contentType: file.type });
+        .upload(originalPath, originalBlob, { contentType: originalBlob.type || "image/jpeg" });
       if (upErr) throw upErr;
 
       const rows = [];
@@ -135,17 +151,17 @@ function AddItem() {
         if (d.aiDataUrl) {
           const blob = await (await fetch(d.aiDataUrl)).blob();
           const p = `${uid}/${crypto.randomUUID()}.png`;
-          const { error } = await supabase.storage.from("wardrobe").upload(p, blob, {
-            contentType: "image/png",
-          });
+          const { error } = await supabase.storage
+            .from("wardrobe")
+            .upload(p, blob, { contentType: "image/png" });
           if (!error) aiPath = p;
         }
         if (d.aiDataUrl2) {
           const blob2 = await (await fetch(d.aiDataUrl2)).blob();
           const p2 = `${uid}/${crypto.randomUUID()}.png`;
-          const { error } = await supabase.storage.from("wardrobe").upload(p2, blob2, {
-            contentType: "image/png",
-          });
+          const { error } = await supabase.storage
+            .from("wardrobe")
+            .upload(p2, blob2, { contentType: "image/png" });
           if (!error) aiPath2 = p2;
         }
         rows.push({
@@ -174,6 +190,17 @@ function AddItem() {
 
   return (
     <div className="px-6 pt-10 pb-8">
+      {cropping && rawUrl && (
+        <ImageCropper
+          src={rawUrl}
+          onCancel={() => setCropping(false)}
+          onDone={(url) => {
+            setCropping(false);
+            analyze(url);
+          }}
+        />
+      )}
+
       <header className="mb-6 flex items-center justify-between">
         <Link to="/wardrobe" className="rounded-full border border-border p-2">
           <X className="h-5 w-5" strokeWidth={1.5} />
@@ -183,8 +210,8 @@ function AddItem() {
       </header>
 
       <p className="mb-6 text-center text-sm text-muted-foreground">
-        Fotografiere ein einzelnes Teil — oder mehrere auf einmal. Die KI erkennt jedes Teil und legt es
-        einzeln an.
+        Fotografiere einzelne Teile, mehrere auf einmal — oder lade ein Foto von dir im Outfit hoch. Die KI
+        erkennt jedes Teil inklusive Accessoires wie Sonnenbrille oder Mütze.
       </p>
 
       <div className="mb-6 rounded-3xl bg-card p-4 shadow-sm">
@@ -207,9 +234,15 @@ function AddItem() {
           onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
         />
         {dataUrl && (
-          <Button variant="outline" className="mt-3 w-full" onClick={() => fileRef.current?.click()}>
-            Foto ändern
-          </Button>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={() => setCropping(true)}>
+              <Crop className="mr-2 h-4 w-4" />
+              Zuschneiden
+            </Button>
+            <Button variant="outline" onClick={() => fileRef.current?.click()}>
+              Foto ändern
+            </Button>
+          </div>
         )}
       </div>
 
@@ -227,6 +260,36 @@ function AddItem() {
       <div className="space-y-4">
         {drafts.map((d) => (
           <div key={d.key} className="space-y-4 rounded-3xl bg-card p-5 shadow-sm">
+            {d.matchName && !d.duplicateDecided && (
+              <div className="rounded-2xl border border-primary/40 bg-accent p-4">
+                <p className="text-sm">
+                  Kennen wir das schon? Das sieht aus wie „{d.matchName}" in deinem Schrank.
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => patch(d.key, { duplicateDecided: true, include: false })}
+                  >
+                    Ja, dasselbe
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => patch(d.key, { duplicateDecided: true, include: true })}
+                  >
+                    Nein, neu anlegen
+                  </Button>
+                </div>
+              </div>
+            )}
+            {d.matchName && d.duplicateDecided && (
+              <p className="text-xs text-muted-foreground">
+                {d.include
+                  ? `Wird trotz Ähnlichkeit zu „${d.matchName}" neu angelegt.`
+                  : `Bereits im Schrank als „${d.matchName}" — wird nicht noch einmal angelegt.`}
+              </p>
+            )}
+
             <div className="flex gap-4">
               <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-secondary">
                 <img
@@ -237,7 +300,13 @@ function AddItem() {
               </div>
               <div className="min-w-0 flex-1 space-y-2">
                 <p className="text-xs text-muted-foreground">
-                  {d.smoothing ? "KI glättet das Bild…" : d.keepOriginal ? "Originalfoto" : d.aiDataUrl ? "KI-Bild" : "Originalfoto"}
+                  {d.smoothing
+                    ? "KI glättet das Bild…"
+                    : d.keepOriginal
+                      ? "Originalfoto"
+                      : d.aiDataUrl
+                        ? "KI-Bild"
+                        : "Originalfoto"}
                 </p>
                 <button
                   type="button"
@@ -250,7 +319,7 @@ function AddItem() {
                 {multi && (
                   <button
                     type="button"
-                    onClick={() => patch(d.key, { include: !d.include })}
+                    onClick={() => patch(d.key, { include: !d.include, duplicateDecided: true })}
                     className="flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-left text-xs"
                   >
                     <Box checked={d.include} />
