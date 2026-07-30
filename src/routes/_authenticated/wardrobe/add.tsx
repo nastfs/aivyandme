@@ -589,13 +589,15 @@ function AddItem() {
       </Dialog>
 
       {drafts.length > 0 && (
-        <Button onClick={onSave} disabled={saving || analyzing} className="mt-6 w-full">
-          {saving
-            ? "Speichern…"
-            : multi
-              ? `${drafts.filter((d) => d.include).length} Teile zum Kleiderschrank hinzufügen`
-              : "Zum Kleiderschrank hinzufügen"}
-        </Button>
+        <div className="sticky bottom-4 z-10 mt-6">
+          <Button onClick={onSave} disabled={saving || analyzing} className="w-full shadow-lg">
+            {saving
+              ? "Speichern…"
+              : multi
+                ? `${drafts.filter((d) => d.include).length} Teile zum Kleiderschrank hinzufügen`
+                : "Zum Kleiderschrank hinzufügen"}
+          </Button>
+        </div>
       )}
     </div>
   );
