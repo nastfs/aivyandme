@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "sdk_version": "0.26.1",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://dwcopjrtzyvqjectmdfq.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "aivy-me",
+      "version": "0.1.0",
+      "title": "Aivy & Me"
+    },
+    "tools": [
+      {
+        "name": "list_wardrobe_items",
+        "title": "Kleiderschrank auflisten",
+        "description": "Listet die Kleidungsstücke im digitalen Kleiderschrank der angemeldeten Person, optional nach Kategorie gefiltert.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "category": {
+              "description": "Optionaler Kategoriefilter.",
+              "type": "string",
+              "enum": [
+                "oberteile",
+                "hosen",
+                "kleider",
+                "blazer",
+                "roecke",
+                "schuhe",
+                "taschen",
+                "accessoires",
+                "sport",
+                "sonstiges"
+              ]
+            },
+            "limit": {
+              "default": 50,
+              "description": "Maximale Anzahl Teile.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "wardrobe_stats",
+        "title": "Kleiderschrank-Statistik",
+        "description": "Zählt die Kleidungsstücke pro Kategorie sowie die Gesamtzahl im Kleiderschrank.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_outfits",
+        "title": "Outfits auflisten",
+        "description": "Listet die gespeicherten Outfits inklusive der enthaltenen Kleidungsstücke.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "limit": {
+              "default": 30,
+              "description": "Maximale Anzahl Outfits.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_planned_outfits",
+        "title": "Outfit-Planung anzeigen",
+        "description": "Zeigt geplante Outfits in einem Zeitraum (Kalenderansicht).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "from": {
+              "description": "Startdatum YYYY-MM-DD.",
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "to": {
+              "description": "Enddatum YYYY-MM-DD.",
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "create_outfit",
+        "title": "Outfit erstellen",
+        "description": "Erstellt ein neues Outfit aus vorhandenen Kleidungsstücken (IDs aus list_wardrobe_items) und plant es optional auf ein Datum.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80,
+              "description": "Name des Outfits."
+            },
+            "itemIds": {
+              "minItems": 1,
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "description": "IDs der Kleidungsstücke."
+            },
+            "notes": {
+              "description": "Optionale Notiz.",
+              "type": "string",
+              "maxLength": 500
+            },
+            "plannedDate": {
+              "description": "Optionales Datum (YYYY-MM-DD), auf das das Outfit geplant wird.",
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          "required": [
+            "name",
+            "itemIds"
+          ]
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
