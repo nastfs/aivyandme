@@ -1,25 +1,15 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { BottomNav } from "@/components/BottomNav";
 import { supabase } from "@/integrations/supabase/client";
-import { ensureDemoUser } from "@/lib/demo-user.functions";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
-  beforeLoad: async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) {
-      try {
-        const creds = await ensureDemoUser();
-        const { error } = await supabase.auth.signInWithPassword({
-          email: creds.email,
-          password: creds.password,
-        });
-        if (error) throw error;
-      } catch (e) {
-        console.error("Demo auto-login failed", e);
-        throw redirect({ to: "/auth" });
-      }
+  beforeLoad: async ({ location }) => {
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) {
+      throw redirect({ to: "/auth", search: { next: location.href } });
     }
+    return { user: data.user };
   },
   component: Layout,
 });

@@ -22,11 +22,10 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const navigate = useNavigate();
   const { next } = Route.useSearch();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   function goNext() {
     if (next) {
@@ -48,25 +47,21 @@ function AuthPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
-      if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: next ? `${window.location.origin}${next}` : window.location.origin,
-            data: { display_name: name || email.split("@")[0] },
-          },
-        });
-        if (error) throw error;
-        toast.success("Konto erstellt");
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        throw new Error(
+          error.message.toLowerCase().includes("invalid login")
+            ? "E-Mail oder Passwort ist nicht korrekt."
+            : error.message,
+        );
       }
       goNext();
     } catch (err: any) {
-      toast.error(err.message ?? "Etwas ist schiefgelaufen");
+      const msg = err.message ?? "Etwas ist schiefgelaufen";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -82,14 +77,7 @@ function AuthPage() {
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4 rounded-3xl bg-card p-6 shadow-sm">
-        <h2 className="text-2xl">{mode === "signin" ? "Willkommen zurück" : "Konto anlegen"}</h2>
-
-        {mode === "signup" && (
-          <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
-            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Emma" />
-          </div>
-        )}
+        <h2 className="text-2xl">Willkommen zurück</h2>
 
         <div className="space-y-2">
           <Label htmlFor="email">E-Mail</Label>
@@ -102,16 +90,18 @@ function AuthPage() {
         </div>
 
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "Bitte warten…" : mode === "signin" ? "Anmelden" : "Registrieren"}
+          {loading ? "Bitte warten…" : "Anmelden"}
         </Button>
 
-        <button
-          type="button"
-          onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-          className="w-full text-center text-sm text-muted-foreground hover:text-foreground"
-        >
-          {mode === "signin" ? "Noch kein Konto? Registrieren" : "Schon Mitglied? Anmelden"}
-        </button>
+        {error && (
+          <p role="alert" className="text-center text-sm text-destructive">
+            {error}
+          </p>
+        )}
+
+        <p className="w-full text-center text-sm text-muted-foreground">
+          Zugang nur mit Test-Account (MVP-Phase)
+        </p>
       </form>
     </div>
   );
