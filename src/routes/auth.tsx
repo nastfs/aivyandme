@@ -25,6 +25,7 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   function goNext() {
     if (next) {
@@ -46,6 +47,7 @@ function AuthPage() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
@@ -57,7 +59,9 @@ function AuthPage() {
       }
       goNext();
     } catch (err: any) {
-      toast.error(err.message ?? "Etwas ist schiefgelaufen");
+      const msg = err.message ?? "Etwas ist schiefgelaufen";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -88,6 +92,12 @@ function AuthPage() {
         <Button type="submit" className="w-full" disabled={loading}>
           {loading ? "Bitte warten…" : "Anmelden"}
         </Button>
+
+        {error && (
+          <p role="alert" className="text-center text-sm text-destructive">
+            {error}
+          </p>
+        )}
 
         <p className="w-full text-center text-sm text-muted-foreground">
           Zugang nur mit Test-Account (MVP-Phase)
