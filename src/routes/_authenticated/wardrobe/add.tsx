@@ -343,8 +343,9 @@ function AddItem() {
       </header>
 
       <p className="mb-6 text-center text-sm text-muted-foreground">
-        Fotografiere einzelne Teile, mehrere auf einmal — oder lade ein Foto von dir im Outfit hoch. Die KI
-        erkennt jedes Teil inklusive Accessoires wie Sonnenbrille oder Mütze.
+        Fotografiere einzelne Teile, mehrere auf einmal — oder lade ein Foto von dir im Outfit hoch.
+        Die KI erkennt Kleidung und Schuhe (max. 7 Teile) und schneidet sie aus deinem Foto zu. Die
+        KI-Bilder werden erst nach deiner Bestätigung erstellt.
       </p>
 
       <div className="mb-6 rounded-3xl bg-card p-4 shadow-sm">
@@ -442,21 +443,23 @@ function AddItem() {
               <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-secondary">
                 <img
                   src={
-                    !d.keepOriginal && d.aiDataUrl ? d.aiDataUrl : d.sourceDataUrl || dataUrl
+                    !d.keepOriginal && d.aiDataUrl
+                      ? d.aiDataUrl
+                      : d.sourceDataUrl || d.cropDataUrl || dataUrl
                   }
                   alt=""
-                  className={`h-full w-full object-cover transition ${d.smoothing && !d.keepOriginal ? "opacity-50 blur-sm" : ""}`}
+                  className={`h-full w-full object-cover transition ${d.smoothing ? "opacity-50 blur-sm" : ""}`}
                 />
               </div>
               <div className="min-w-0 flex-1 space-y-2">
                 <p className="text-xs text-muted-foreground">
                   {d.smoothing
-                    ? "KI glättet das Bild…"
+                    ? "KI-Bild wird erstellt…"
                     : d.keepOriginal
                       ? "Originalfoto"
                       : d.aiDataUrl
                         ? "KI-Bild"
-                        : "Originalfoto"}
+                        : "Ausschnitt aus deinem Foto"}
                 </p>
                 <button
                   type="button"
@@ -604,14 +607,46 @@ function AddItem() {
         </DialogContent>
       </Dialog>
 
-      {drafts.length > 0 && (
+      {phase === "done" && (
+        <div className="mt-6 space-y-4 rounded-3xl bg-card p-5 text-center shadow-sm">
+          <p className="text-sm">
+            {addedCount > 1
+              ? `${addedCount} Teile wurden deinem Kleiderschrank hinzugefügt.`
+              : "Das Teil wurde deinem Kleiderschrank hinzugefügt."}
+          </p>
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            className="flex w-full cursor-not-allowed items-center justify-between gap-3 rounded-2xl border border-border bg-secondary/60 px-4 py-3 text-left text-xs text-muted-foreground opacity-60"
+          >
+            <span>
+              Auch Accessoires wie Schmuck, Gürtel oder Taschen automatisch erkennen lassen?
+            </span>
+            <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+              Pro
+            </span>
+          </button>
+          <Button className="w-full" onClick={() => navigate({ to: "/wardrobe" })}>
+            Zum Kleiderschrank
+          </Button>
+        </div>
+      )}
+
+      {drafts.length > 0 && phase !== "done" && (
         <div className="sticky bottom-4 z-10 mt-6">
-          <Button onClick={onSave} disabled={saving || analyzing} className="w-full shadow-lg">
+          <Button
+            onClick={onSave}
+            disabled={saving || analyzing || phase === "generating"}
+            className="w-full shadow-lg"
+          >
             {saving
               ? "Speichern…"
-              : multi
-                ? `${drafts.filter((d) => d.include).length} Teile zum Kleiderschrank hinzufügen`
-                : "Zum Kleiderschrank hinzufügen"}
+              : phase === "generating"
+                ? "KI-Bilder werden erstellt…"
+                : multi
+                  ? `${drafts.filter((d) => d.include).length} Teile bestätigen & Bilder erstellen`
+                  : "Bestätigen & Bild erstellen"}
           </Button>
         </div>
       )}
