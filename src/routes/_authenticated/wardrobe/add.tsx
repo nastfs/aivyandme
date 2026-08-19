@@ -492,7 +492,7 @@ function AddItem() {
                       : d.sourceDataUrl || d.cropDataUrl || dataUrl
                   }
                   alt=""
-                  className={`h-full w-full object-cover transition ${d.smoothing ? "opacity-50 blur-sm" : ""}`}
+                  className={`h-full w-full object-contain transition ${d.smoothing ? "opacity-50 blur-sm" : ""}`}
                 />
               </div>
               <div className="min-w-0 flex-1 space-y-2">
