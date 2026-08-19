@@ -50,7 +50,34 @@ type Draft = {
   correction: string;
   /** eigenes Einzelfoto dieses Teils (überschreibt das Gruppenfoto) */
   sourceDataUrl: string;
+  /** aus dem Originalfoto zugeschnittener Ausschnitt (ohne KI) */
+  cropDataUrl: string;
 };
+
+/** Schneidet eine normalisierte Bounding-Box aus einer Data-URL aus. */
+async function cropBox(
+  src: string,
+  box: { x: number; y: number; w: number; h: number } | null | undefined,
+): Promise<string> {
+  if (!box) return src;
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = reject;
+    i.src = src;
+  });
+  const pad = 0.03;
+  const x = Math.max(0, (box.x - pad) * img.width);
+  const y = Math.max(0, (box.y - pad) * img.height);
+  const w = Math.min(img.width - x, (box.w + pad * 2) * img.width);
+  const h = Math.min(img.height - y, (box.h + pad * 2) * img.height);
+  if (w < 8 || h < 8) return src;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(w);
+  canvas.height = Math.round(h);
+  canvas.getContext("2d")!.drawImage(img, x, y, w, h, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.92);
+}
 
 function AddItem() {
   const navigate = useNavigate();
@@ -69,6 +96,8 @@ function AddItem() {
   const [correctText, setCorrectText] = useState("");
   const [correctImage, setCorrectImage] = useState("");
   const [correcting, setCorrecting] = useState(false);
+  const [phase, setPhase] = useState<"review" | "generating" | "done">("review");
+  const [addedCount, setAddedCount] = useState(0);
 
   function patch(key: string, changes: Partial<Draft>) {
     setDrafts((ds) => ds.map((d) => (d.key === key ? { ...d, ...changes } : d)));
@@ -77,6 +106,7 @@ function AddItem() {
   function onFile(f: File) {
     setDrafts([]);
     setDataUrl("");
+    setPhase("review");
     const reader = new FileReader();
     reader.onload = () => {
       setRawUrl(reader.result as string);
@@ -102,6 +132,7 @@ function AddItem() {
       }));
 
       const { items } = await detect({ data: { imageDataUrl: url, existing } });
+      const crops = await Promise.all(items.map((it) => cropBox(url, it.box).catch(() => url)));
       const next: Draft[] = items.map((it, i) => ({
         key: `${i}-${it.name}`,
         name: it.name,
@@ -110,37 +141,18 @@ function AddItem() {
         description: it.description,
         aiDataUrl: "",
         aiDataUrl2: "",
-        smoothing: true,
+        smoothing: false,
         keepOriginal: false,
         include: !it.matchName,
         matchName: it.matchName ?? null,
         duplicateDecided: false,
         correction: "",
         sourceDataUrl: "",
+        cropDataUrl: crops[i] ?? url,
       }));
       setDrafts(next);
       toast.success(items.length > 1 ? `${items.length} Teile erkannt` : "Teil erkannt", {
         description: items.map((i) => i.name).join(", "),
-      });
-
-      next.forEach((d) => {
-        const focus = next.length > 1 ? d.description || d.name : undefined;
-        smooth({ data: { imageDataUrl: url, focus, category: d.category, view: "top" } })
-          .then(({ b64 }) =>
-            patch(d.key, { aiDataUrl: `data:image/png;base64,${b64}`, smoothing: false }),
-          )
-          .catch(() => {
-            patch(d.key, { smoothing: false });
-            toast.error(`KI-Bild für „${d.name}" fehlgeschlagen`, {
-              description: "Das Originalfoto wird verwendet.",
-            });
-          });
-
-        if (d.category === "schuhe") {
-          smooth({ data: { imageDataUrl: url, focus, category: "schuhe", view: "side" } })
-            .then(({ b64 }) => patch(d.key, { aiDataUrl2: `data:image/png;base64,${b64}` }))
-            .catch(() => {});
-        }
       });
     } catch (e: any) {
       toast.error("Automatische Erkennung fehlgeschlagen", { description: e.message });
@@ -151,7 +163,44 @@ function AddItem() {
 
   async function onSave() {
     if (!dataUrl) return;
-    return saveInner();
+    const chosen = drafts.filter((d) => d.include);
+    if (!chosen.length) return toast.error("Wähle mindestens ein Teil aus");
+    setPhase("generating");
+    // Schritt 3: KI-Bilder erst jetzt erzeugen
+    const generated = await Promise.all(
+      chosen.map(async (d) => {
+        const base = d.sourceDataUrl || d.cropDataUrl || dataUrl;
+        patch(d.key, { smoothing: true });
+        let aiDataUrl = "";
+        let aiDataUrl2 = "";
+        try {
+          const { b64 } = await smooth({
+            data: {
+              imageDataUrl: base,
+              category: d.category,
+              view: "top",
+              correction: d.correction || undefined,
+            },
+          });
+          aiDataUrl = `data:image/png;base64,${b64}`;
+        } catch {
+          toast.error(`KI-Bild für „${d.name}" fehlgeschlagen`, {
+            description: "Das Originalfoto wird verwendet.",
+          });
+        }
+        if (d.category === "schuhe") {
+          try {
+            const r2 = await smooth({
+              data: { imageDataUrl: base, category: "schuhe", view: "side" },
+            });
+            aiDataUrl2 = `data:image/png;base64,${r2.b64}`;
+          } catch {}
+        }
+        patch(d.key, { aiDataUrl, aiDataUrl2, smoothing: false });
+        return { ...d, aiDataUrl, aiDataUrl2 };
+      }),
+    );
+    return saveInner(generated);
   }
 
   function removeDraft(key: string) {
@@ -182,49 +231,15 @@ function AddItem() {
         correction: text,
         sourceDataUrl: correctImage || d.sourceDataUrl,
         keepOriginal: false,
-        smoothing: true,
+        smoothing: false,
         aiDataUrl: "",
         aiDataUrl2: "",
       });
       setCorrectKey(null);
       setCorrectText("");
       setCorrectImage("");
-      toast.success(`Korrektur übernommen: ${refined.name}`, {
-        description: "KI-Bild wird neu erzeugt",
-      });
-
-      const focus = d.description || d.name;
-      const useFocus = !correctImage && drafts.length > 1 ? focus : undefined;
-      smooth({
-        data: {
-          imageDataUrl: base,
-          focus: useFocus,
-          category: refined.category,
-          view: "top",
-          correction: text,
-        },
-      })
-        .then(({ b64 }) =>
-          patch(d.key, { aiDataUrl: `data:image/png;base64,${b64}`, smoothing: false }),
-        )
-        .catch(() => {
-          patch(d.key, { smoothing: false });
-          toast.error("Neues KI-Bild fehlgeschlagen");
-        });
-
-      if (refined.category === "schuhe") {
-        smooth({
-          data: {
-            imageDataUrl: base,
-            focus: useFocus,
-            category: "schuhe",
-            view: "side",
-            correction: text,
-          },
-        })
-          .then(({ b64 }) => patch(d.key, { aiDataUrl2: `data:image/png;base64,${b64}` }))
-          .catch(() => {});
-      }
+      void base;
+      toast.success(`Korrektur übernommen: ${refined.name}`);
     } catch (e: any) {
       toast.error(e.message ?? "Korrektur fehlgeschlagen");
     } finally {
@@ -232,9 +247,8 @@ function AddItem() {
     }
   }
 
-  async function saveInner() {
+  async function saveInner(chosen: Draft[]) {
     if (!dataUrl) return;
-    const chosen = drafts.filter((d) => d.include);
     if (!chosen.length) return toast.error("Wähle mindestens ein Teil aus");
     setSaving(true);
     try {
@@ -292,9 +306,11 @@ function AddItem() {
       const { error: insErr } = await supabase.from("wardrobe_items").insert(rows);
       if (insErr) throw insErr;
       toast.success(rows.length > 1 ? `${rows.length} Teile gespeichert` : "Teil gespeichert");
-      navigate({ to: "/wardrobe" });
+      setAddedCount(rows.length);
+      setPhase("done");
     } catch (e: any) {
       toast.error(e.message ?? "Speichern fehlgeschlagen");
+      setPhase("review");
     } finally {
       setSaving(false);
     }
@@ -327,8 +343,9 @@ function AddItem() {
       </header>
 
       <p className="mb-6 text-center text-sm text-muted-foreground">
-        Fotografiere einzelne Teile, mehrere auf einmal — oder lade ein Foto von dir im Outfit hoch. Die KI
-        erkennt jedes Teil inklusive Accessoires wie Sonnenbrille oder Mütze.
+        Fotografiere einzelne Teile, mehrere auf einmal — oder lade ein Foto von dir im Outfit hoch.
+        Die KI erkennt Kleidung und Schuhe (max. 7 Teile) und schneidet sie aus deinem Foto zu. Die
+        KI-Bilder werden erst nach deiner Bestätigung erstellt.
       </p>
 
       <div className="mb-6 rounded-3xl bg-card p-4 shadow-sm">
@@ -382,7 +399,7 @@ function AddItem() {
       )}
 
       <div className="space-y-4">
-        {drafts.map((d) => (
+        {(phase === "done" ? [] : drafts).map((d) => (
           <div key={d.key} className="relative space-y-4 rounded-3xl bg-card p-5 shadow-sm">
             <button
               type="button"
@@ -426,21 +443,23 @@ function AddItem() {
               <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-secondary">
                 <img
                   src={
-                    !d.keepOriginal && d.aiDataUrl ? d.aiDataUrl : d.sourceDataUrl || dataUrl
+                    !d.keepOriginal && d.aiDataUrl
+                      ? d.aiDataUrl
+                      : d.sourceDataUrl || d.cropDataUrl || dataUrl
                   }
                   alt=""
-                  className={`h-full w-full object-cover transition ${d.smoothing && !d.keepOriginal ? "opacity-50 blur-sm" : ""}`}
+                  className={`h-full w-full object-cover transition ${d.smoothing ? "opacity-50 blur-sm" : ""}`}
                 />
               </div>
               <div className="min-w-0 flex-1 space-y-2">
                 <p className="text-xs text-muted-foreground">
                   {d.smoothing
-                    ? "KI glättet das Bild…"
+                    ? "KI-Bild wird erstellt…"
                     : d.keepOriginal
                       ? "Originalfoto"
                       : d.aiDataUrl
                         ? "KI-Bild"
-                        : "Originalfoto"}
+                        : "Ausschnitt aus deinem Foto"}
                 </p>
                 <button
                   type="button"
@@ -588,14 +607,46 @@ function AddItem() {
         </DialogContent>
       </Dialog>
 
-      {drafts.length > 0 && (
+      {phase === "done" && (
+        <div className="mt-6 space-y-4 rounded-3xl bg-card p-5 text-center shadow-sm">
+          <p className="text-sm">
+            {addedCount > 1
+              ? `${addedCount} Teile wurden deinem Kleiderschrank hinzugefügt.`
+              : "Das Teil wurde deinem Kleiderschrank hinzugefügt."}
+          </p>
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            className="flex w-full cursor-not-allowed items-center justify-between gap-3 rounded-2xl border border-border bg-secondary/60 px-4 py-3 text-left text-xs text-muted-foreground opacity-60"
+          >
+            <span>
+              Auch Accessoires wie Schmuck, Gürtel oder Taschen automatisch erkennen lassen?
+            </span>
+            <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide">
+              Pro
+            </span>
+          </button>
+          <Button className="w-full" onClick={() => navigate({ to: "/wardrobe" })}>
+            Zum Kleiderschrank
+          </Button>
+        </div>
+      )}
+
+      {drafts.length > 0 && phase !== "done" && (
         <div className="sticky bottom-4 z-10 mt-6">
-          <Button onClick={onSave} disabled={saving || analyzing} className="w-full shadow-lg">
+          <Button
+            onClick={onSave}
+            disabled={saving || analyzing || phase === "generating"}
+            className="w-full shadow-lg"
+          >
             {saving
               ? "Speichern…"
-              : multi
-                ? `${drafts.filter((d) => d.include).length} Teile zum Kleiderschrank hinzufügen`
-                : "Zum Kleiderschrank hinzufügen"}
+              : phase === "generating"
+                ? "KI-Bilder werden erstellt…"
+                : multi
+                  ? `${drafts.filter((d) => d.include).length} Teile bestätigen & Bilder erstellen`
+                  : "Bestätigen & Bild erstellen"}
           </Button>
         </div>
       )}

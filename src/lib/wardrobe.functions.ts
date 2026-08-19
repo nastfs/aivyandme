@@ -30,6 +30,19 @@ export const smoothItemImage = createServerFn({ method: "POST" })
           : " WICHTIG (Schuhe, Bild 1 – Draufsicht): Zeige das Paar Schuhe exakt von oben (Vogelperspektive, Kamera senkrecht über den Schuhen), beide Schuhe flach nebeneinander parallel liegend, Zehenspitzen nach oben, gleicher Abstand, symmetrisch und mittig. Keine Schrägansicht, keine Rotation, keine Perspektivverzerrung."
         : "";
 
+    const promptText =
+      (data.focus
+                    ? `Auf diesem Foto sind mehrere Kleidungsstücke zu sehen. Nimm AUSSCHLIESSLICH dieses eine Teil: "${data.focus}". Alle anderen Kleidungsstücke, Objekte und Personen müssen komplett verschwinden. `
+                    : "") +
+                  "Erzeuge ein professionelles E-Commerce-Produktfoto (Stockfoto-Look) des Kleidungsstücks. Entferne den kompletten Hintergrund und ersetze ihn durch einen komplett gleichmäßigen, reinweißen Studio-Hintergrund ohne Schatten, Textur, Möbel oder Raumdetails. Entferne Hände, Arme, Personen, Kleiderbügel und alles andere, was das Teil hält. Zeige das Teil freigestellt, mittig, gerade ausgerichtet und flach/glatt liegend wie im Online-Shop-Katalog, mit weichem, gleichmäßigem Studiolicht und scharfen sauberen Kanten. Wichtig: Das Kleidungsstück selbst darf NICHT verändert oder verschönert werden — Schnitt, Proportionen, Farbe, Muster, Material, Gebrauchsspuren, Flecken und Knötchen müssen exakt erhalten bleiben. Nur Halte-Falten glätten und den Hintergrund entfernen." +
+                  personRule +
+                  correctionRule +
+      shoeRule;
+
+    const mime = data.imageDataUrl.slice(5, data.imageDataUrl.indexOf(";")) || "image/jpeg";
+    const rawB64 = data.imageDataUrl.slice(data.imageDataUrl.indexOf(",") + 1);
+
+    // günstigste Stufe: Nano Banana 2 Lite (generateContent-Body, Standardauflösung)
     const res = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
       method: "POST",
       headers: {
@@ -37,27 +50,17 @@ export const smoothItemImage = createServerFn({ method: "POST" })
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-3.1-flash-image",
-        messages: [
+        model: "google/gemini-3.1-flash-lite-image",
+        contents: [
           {
             role: "user",
-            content: [
-              {
-                type: "text",
-                text:
-                  (data.focus
-                    ? `Auf diesem Foto sind mehrere Kleidungsstücke zu sehen. Nimm AUSSCHLIESSLICH dieses eine Teil: "${data.focus}". Alle anderen Kleidungsstücke, Objekte und Personen müssen komplett verschwinden. `
-                    : "") +
-                  "Erzeuge ein professionelles E-Commerce-Produktfoto (Stockfoto-Look) des Kleidungsstücks. Entferne den kompletten Hintergrund und ersetze ihn durch einen komplett gleichmäßigen, reinweißen Studio-Hintergrund ohne Schatten, Textur, Möbel oder Raumdetails. Entferne Hände, Arme, Personen, Kleiderbügel und alles andere, was das Teil hält. Zeige das Teil freigestellt, mittig, gerade ausgerichtet und flach/glatt liegend wie im Online-Shop-Katalog, mit weichem, gleichmäßigem Studiolicht und scharfen sauberen Kanten. Wichtig: Das Kleidungsstück selbst darf NICHT verändert oder verschönert werden — Schnitt, Proportionen, Farbe, Muster, Material, Gebrauchsspuren, Flecken und Knötchen müssen exakt erhalten bleiben. Nur Halte-Falten glätten und den Hintergrund entfernen." +
-                  personRule +
-                  correctionRule +
-                  shoeRule,
-              },
-              { type: "image_url", image_url: { url: data.imageDataUrl } },
+            parts: [
+              { text: promptText },
+              { inlineData: { mimeType: mime, data: rawB64 } },
             ],
           },
         ],
-        modalities: ["image", "text"],
+        generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
       }),
     });
 
@@ -136,6 +139,8 @@ export type DetectedItem = {
   /** id eines bereits vorhandenen Teils, das die KI für identisch hält */
   matchId?: string | null;
   matchName?: string | null;
+  /** normalisierte Bounding-Box (0–1) im Originalfoto für den Zuschnitt */
+  box?: { x: number; y: number; w: number; h: number } | null;
 };
 
 type ExistingItem = { id: string; name: string; category: string; color: string };
@@ -172,13 +177,13 @@ export const detectItems = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "Du bist ein Fashion-Assistent. Erkenne ALLE einzelnen Kleidungsstücke und Accessoires auf dem Foto. Das Foto kann (a) einzelne Teile flach liegend, (b) mehrere Teile nebeneinander oder (c) eine Person zeigen, die ein komplettes Outfit trägt. Bei getragenen Outfits: erkenne jedes getragene Teil einzeln (Oberteil, Hose/Rock, Kleid, Jacke/Blazer, Schuhe, Tasche) und auch Accessoires wie Sonnenbrillen, Mützen/Hüte/Caps, Schals, Gürtel, auffälligen Schmuck — Accessoires bekommen die Kategorie \"accessoires\". Ignoriere die Person selbst, Körperteile, Haare und den Hintergrund. Antworte AUSSCHLIESSLICH mit JSON: {\"items\":[{\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|taschen|accessoires|sport|sonstiges\",\"name\":\"kurzer deutscher Name\",\"color\":\"Hauptfarbe deutsch\",\"description\":\"eindeutige visuelle Beschreibung inkl. Position, z.B. 'der beige Strickpulli, den die Person oben trägt'\",\"matchId\":null}]}. Ein Paar Schuhe zählt als ein Teil. Kein Fließtext, kein Markdown." +
+              "Du bist ein Fashion-Assistent. Erkenne auf dem Foto NUR echte Kleidungsstücke: Oberteile (Shirt, Pulli, Jacke, Blazer), Unterteile (Hose, Rock, Shorts), Kleider und Schuhe. IGNORIERE strikt alle Accessoires und Extras: Schmuck, Uhren, Sonnenbrillen, Mützen/Hüte, Schals, Gürtel, Socken, Taschen, Handy, Möbel, Hintergrund, Person, Haut, Haare. Maximal 7 Teile. Halte die Antwort extrem knapp. Antworte AUSSCHLIESSLICH mit JSON: {\"items\":[{\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|sport|sonstiges\",\"name\":\"kurzer deutscher Name (max 3 Wörter)\",\"color\":\"präzise Farbe deutsch, z.B. 'Cremeweiß', 'Dunkelblau', 'Camel'\",\"description\":\"max 5 Wörter Position, z.B. 'Pulli oben'\",\"box\":{\"x\":0.0,\"y\":0.0,\"w\":0.0,\"h\":0.0},\"matchId\":null}]}. box ist die normalisierte Bounding-Box (0–1, x/y = linke obere Ecke) des Teils im Bild, möglichst eng um das Teil. Ein Paar Schuhe zählt als ein Teil. Kein Fließtext, kein Markdown." +
               existingBlock,
           },
           {
             role: "user",
             content: [
-              { type: "text", text: "Welche Kleidungsstücke und Accessoires sind auf diesem Foto?" },
+              { type: "text", text: "Welche Kleidungsstücke sind auf diesem Foto? Nur Kleidung, keine Accessoires." },
               { type: "image_url", image_url: { url: data.imageDataUrl } },
             ],
           },
@@ -192,8 +197,10 @@ export const detectItems = createServerFn({ method: "POST" })
     try {
       const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
       const list = Array.isArray(parsed?.items) ? parsed.items : [];
-      const items: DetectedItem[] = list.slice(0, 12).map((p: any) => {
+      const num = (v: any, d: number) => (typeof v === "number" && isFinite(v) ? v : d);
+      const items: DetectedItem[] = list.slice(0, 7).map((p: any) => {
         const match = existing.find((e) => e.id === p?.matchId);
+        const b = p?.box;
         return {
           category: ALLOWED.includes(p?.category) ? (p.category as Cat) : "sonstiges",
           name: typeof p?.name === "string" ? p.name.slice(0, 60) : "Neues Teil",
@@ -201,6 +208,14 @@ export const detectItems = createServerFn({ method: "POST" })
           description: typeof p?.description === "string" ? p.description.slice(0, 200) : "",
           matchId: match ? match.id : null,
           matchName: match ? match.name : null,
+          box: b
+            ? {
+                x: Math.min(1, Math.max(0, num(b.x, 0))),
+                y: Math.min(1, Math.max(0, num(b.y, 0))),
+                w: Math.min(1, Math.max(0.02, num(b.w, 1))),
+                h: Math.min(1, Math.max(0.02, num(b.h, 1))),
+              }
+            : null,
         };
       });
       return items.length ? { items } : fallback;
