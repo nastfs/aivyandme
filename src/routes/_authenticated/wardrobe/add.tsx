@@ -399,7 +399,7 @@ function AddItem() {
       )}
 
       <div className="space-y-4">
-        {drafts.map((d) => (
+        {(phase === "done" ? [] : drafts).map((d) => (
           <div key={d.key} className="relative space-y-4 rounded-3xl bg-card p-5 shadow-sm">
             <button
               type="button"
