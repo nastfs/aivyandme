@@ -37,12 +37,15 @@ export const smoothItemImage = createServerFn({ method: "POST" })
                   "Erzeuge ein professionelles E-Commerce-Produktfoto (Stockfoto-Look) des Kleidungsstücks. Entferne den kompletten Hintergrund und ersetze ihn durch einen komplett gleichmäßigen, reinweißen Studio-Hintergrund ohne Schatten, Textur, Möbel oder Raumdetails. Entferne Hände, Arme, Personen, Kleiderbügel und alles andere, was das Teil hält. Zeige das Teil freigestellt, mittig, gerade ausgerichtet und flach/glatt liegend wie im Online-Shop-Katalog, mit weichem, gleichmäßigem Studiolicht und scharfen sauberen Kanten. Wichtig: Das Kleidungsstück selbst darf NICHT verändert oder verschönert werden — Schnitt, Proportionen, Farbe, Muster, Material, Gebrauchsspuren, Flecken und Knötchen müssen exakt erhalten bleiben. Nur Halte-Falten glätten und den Hintergrund entfernen." +
                   personRule +
                   correctionRule +
-      shoeRule;
+      shoeRule +
+      " Das Eingabebild zeigt genau EIN Kleidungsstück. Verwende ausschließlich dieses eine sichtbare Teil als Vorlage; erfinde keine weiteren Kleidungsstücke und mische keine Elemente aus anderen Teilen hinzu.";
 
     const mime = data.imageDataUrl.slice(5, data.imageDataUrl.indexOf(";")) || "image/jpeg";
     const rawB64 = data.imageDataUrl.slice(data.imageDataUrl.indexOf(",") + 1);
+    void mime;
+    void rawB64;
 
-    // günstigste Stufe: Nano Banana 2 Lite (generateContent-Body, Standardauflösung)
+    // Standard-Modell (Nano Banana 2) – Chat-Shape mit messages + modalities
     const res = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
       method: "POST",
       headers: {
@@ -50,17 +53,17 @@ export const smoothItemImage = createServerFn({ method: "POST" })
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-3.1-flash-lite-image",
-        contents: [
+        model: "google/gemini-3.1-flash-image",
+        messages: [
           {
             role: "user",
-            parts: [
-              { text: promptText },
-              { inlineData: { mimeType: mime, data: rawB64 } },
+            content: [
+              { type: "text", text: promptText },
+              { type: "image_url", image_url: { url: data.imageDataUrl } },
             ],
           },
         ],
-        generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+        modalities: ["image", "text"],
       }),
     });
 
