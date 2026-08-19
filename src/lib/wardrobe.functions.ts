@@ -177,13 +177,13 @@ export const detectItems = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "Du bist ein Fashion-Assistent. Erkenne auf dem Foto NUR echte Kleidungsstücke: Oberteile (Shirt, Pulli, Jacke, Blazer), Unterteile (Hose, Rock, Shorts), Kleider und Schuhe. IGNORIERE strikt alle Accessoires und Extras: Schmuck, Uhren, Sonnenbrillen, Mützen/Hüte, Schals, Gürtel, Socken, Taschen, Handy, Möbel, Hintergrund, Person, Haut, Haare. Maximal 7 Teile. Halte die Antwort extrem knapp. Antworte AUSSCHLIESSLICH mit JSON: {\"items\":[{\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|sport|sonstiges\",\"name\":\"kurzer deutscher Name (max 3 Wörter)\",\"color\":\"präzise Farbe deutsch, z.B. 'Cremeweiß', 'Dunkelblau', 'Camel'\",\"description\":\"max 5 Wörter Position, z.B. 'Pulli oben'\",\"box\":{\"x\":0.0,\"y\":0.0,\"w\":0.0,\"h\":0.0},\"matchId\":null}]}. box ist die normalisierte Bounding-Box (0–1, x/y = linke obere Ecke) des Teils im Bild, möglichst eng um das Teil. Ein Paar Schuhe zählt als ein Teil. Kein Fließtext, kein Markdown." +
+              "Du bist ein Fashion-Assistent. Erkenne auf dem Foto AUSSCHLIESSLICH reine Bekleidung: Oberteile (Shirt, Pulli, Jacke, Blazer), Unterteile (Hose, Rock, Shorts) und Kleider. STRIKT AUSGESCHLOSSEN und niemals melden: jegliches Schuhwerk (Sneaker, Sandalen, Badeschlappen, Stiefel, Absatzschuhe, Hausschuhe), Socken, Haarbänder und Haaraccessoires, Schmuck, Uhren, Sonnenbrillen, Mützen/Hüte, Schals, Gürtel, Taschen, Handy, Möbel, Hintergrund, Person, Haut, Haare. Wenn du unsicher bist, ob ein Objekt reine Bekleidung ist: lieber weglassen. Maximal 7 Teile. Halte die Antwort extrem knapp. Antworte AUSSCHLIESSLICH mit JSON: {\"items\":[{\"category\":\"oberteile|hosen|kleider|blazer|roecke|sport|sonstiges\",\"name\":\"kurzer deutscher Name (max 3 Wörter)\",\"color\":\"präzise Farbe deutsch, z.B. 'Cremeweiß', 'Dunkelblau', 'Camel'\",\"description\":\"max 5 Wörter Position, z.B. 'Pulli oben'\",\"box\":{\"x\":0.0,\"y\":0.0,\"w\":0.0,\"h\":0.0},\"matchId\":null}]}. box ist die normalisierte Bounding-Box (0–1, x/y = linke obere Ecke) des Teils im Bild, möglichst eng um das Teil. Kein Fließtext, kein Markdown." +
               existingBlock,
           },
           {
             role: "user",
             content: [
-              { type: "text", text: "Welche Kleidungsstücke sind auf diesem Foto? Nur Kleidung, keine Accessoires." },
+              { type: "text", text: "Welche Kleidungsstücke sind auf diesem Foto? Nur reine Bekleidung — keine Schuhe, Socken, Haaraccessoires oder sonstigen Accessoires." },
               { type: "image_url", image_url: { url: data.imageDataUrl } },
             ],
           },
@@ -198,6 +198,8 @@ export const detectItems = createServerFn({ method: "POST" })
       const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
       const list = Array.isArray(parsed?.items) ? parsed.items : [];
       const num = (v: any, d: number) => (typeof v === "number" && isFinite(v) ? v : d);
+      const SHOE_WORDS =
+        /(schuh|sneaker|sandale|pantolette|badeschlappen|flipflop|flip-flop|stiefel|boots?|pumps|heels?|absatz|ballerina|loafer|slipper|hausschuh|mokassin|clog|espadrille|socke|strumpf|haarband|haarreif|scrunchie|haarspange)/i;
       const items: DetectedItem[] = list.slice(0, 7).map((p: any) => {
         const match = existing.find((e) => e.id === p?.matchId);
         const b = p?.box;
@@ -217,8 +219,10 @@ export const detectItems = createServerFn({ method: "POST" })
               }
             : null,
         };
-      });
-      return items.length ? { items } : fallback;
+      }).filter(
+        (it: DetectedItem) => it.category !== ("schuhe" as Cat) && !SHOE_WORDS.test(it.name),
+      );
+      return { items };
     } catch {
       return fallback;
     }

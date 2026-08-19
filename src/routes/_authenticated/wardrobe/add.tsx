@@ -88,6 +88,7 @@ function AddItem() {
   const correctFileRef = useRef<HTMLInputElement>(null);
   const [rawUrl, setRawUrl] = useState("");
   const [cropping, setCropping] = useState(false);
+  const [rescanning, setRescanning] = useState(false);
   const [dataUrl, setDataUrl] = useState("");
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
@@ -115,8 +116,8 @@ function AddItem() {
     reader.readAsDataURL(f);
   }
 
-  async function analyze(url: string) {
-    setDataUrl(url);
+  async function runDetect(url: string, append: boolean) {
+    if (!append) setDataUrl(url);
     setAnalyzing(true);
     try {
       const { data: existingRows } = await supabase
@@ -133,8 +134,9 @@ function AddItem() {
 
       const { items } = await detect({ data: { imageDataUrl: url, existing } });
       const crops = await Promise.all(items.map((it) => cropBox(url, it.box).catch(() => url)));
+      const stamp = Date.now();
       const next: Draft[] = items.map((it, i) => ({
-        key: `${i}-${it.name}`,
+        key: `${stamp}-${i}-${it.name}`,
         name: it.name,
         color: it.color,
         category: it.category as CategoryValue,
@@ -147,18 +149,28 @@ function AddItem() {
         matchName: it.matchName ?? null,
         duplicateDecided: false,
         correction: "",
-        sourceDataUrl: "",
+        sourceDataUrl: append ? url : "",
         cropDataUrl: crops[i] ?? url,
       }));
-      setDrafts(next);
-      toast.success(items.length > 1 ? `${items.length} Teile erkannt` : "Teil erkannt", {
-        description: items.map((i) => i.name).join(", "),
-      });
+      setDrafts((prev) => (append ? [...prev, ...next] : next));
+      if (!items.length) {
+        toast("Kein Kleidungsstück erkannt", {
+          description: "Zoome mit „Wurde etwas nicht erkannt?“ näher an das Teil heran.",
+        });
+      } else {
+        toast.success(items.length > 1 ? `${items.length} Teile erkannt` : "Teil erkannt", {
+          description: items.map((i) => i.name).join(", "),
+        });
+      }
     } catch (e: any) {
       toast.error("Automatische Erkennung fehlgeschlagen", { description: e.message });
     } finally {
       setAnalyzing(false);
     }
+  }
+
+  async function analyze(url: string) {
+    return runDetect(url, false);
   }
 
   async function onSave() {
@@ -325,11 +337,18 @@ function AddItem() {
           src={rawUrl}
           onCancel={() => {
             setCropping(false);
-            if (!dataUrl) analyze(rawUrl);
+            const wasRescan = rescanning;
+            setRescanning(false);
+            if (!wasRescan && !dataUrl) analyze(rawUrl);
           }}
           onDone={(url) => {
             setCropping(false);
-            analyze(url);
+            if (rescanning) {
+              setRescanning(false);
+              runDetect(url, true);
+            } else {
+              analyze(url);
+            }
           }}
         />
       )}
@@ -344,8 +363,10 @@ function AddItem() {
 
       <p className="mb-6 text-center text-sm text-muted-foreground">
         Fotografiere einzelne Teile, mehrere auf einmal — oder lade ein Foto von dir im Outfit hoch.
-        Die KI erkennt Kleidung und Schuhe (max. 7 Teile) und schneidet sie aus deinem Foto zu. Die
-        KI-Bilder werden erst nach deiner Bestätigung erstellt.
+        Die KI erkennt ausschließlich reine Bekleidung — Oberteile, Pullover, Jacken, Hosen, Röcke
+        und Kleider (max. 7 Teile) — und schneidet sie aus deinem Foto zu. Schuhe, Socken und
+        Accessoires werden bewusst nicht erkannt. Die KI-Bilder werden erst nach deiner Bestätigung
+        erstellt.
       </p>
 
       <div className="mb-6 rounded-3xl bg-card p-4 shadow-sm">
@@ -395,6 +416,20 @@ function AddItem() {
         <Button variant="outline" onClick={() => analyze(dataUrl)} className="mb-4 w-full">
           <Sparkles className="mr-2 h-4 w-4" />
           Teile erkennen
+        </Button>
+      )}
+
+      {rawUrl && !analyzing && phase === "review" && (
+        <Button
+          variant="outline"
+          onClick={() => {
+            setRescanning(true);
+            setCropping(true);
+          }}
+          className="mb-4 w-full"
+        >
+          <Crop className="mr-2 h-4 w-4" />
+          Wurde etwas nicht erkannt? Bereich heranzoomen
         </Button>
       )}
 
