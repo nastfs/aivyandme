@@ -37,7 +37,7 @@ export const smoothItemImage = createServerFn({ method: "POST" })
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-3.1-flash-image",
+        model: "google/gemini-3.1-flash-lite-image",
         messages: [
           {
             role: "user",
