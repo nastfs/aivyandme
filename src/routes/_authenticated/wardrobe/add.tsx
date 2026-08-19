@@ -149,7 +149,8 @@ function AddItem() {
         matchName: it.matchName ?? null,
         duplicateDecided: false,
         correction: "",
-        sourceDataUrl: append ? url : "",
+        // Kein Gruppenfoto als Referenz — nur der Einzel-Crop dieses Teils
+        sourceDataUrl: "",
         cropDataUrl: crops[i] ?? url,
       }));
       setDrafts((prev) => (append ? [...prev, ...next] : next));
@@ -181,7 +182,12 @@ function AddItem() {
     // Schritt 3: KI-Bilder erst jetzt erzeugen
     const generated = await Promise.all(
       chosen.map(async (d) => {
-        const base = d.sourceDataUrl || d.cropDataUrl || dataUrl;
+        // STRIKT: nur der Ausschnitt genau dieses Teils (oder ein Einzelfoto der Nutzerin)
+        const base = d.sourceDataUrl || d.cropDataUrl;
+        if (!base) {
+          toast.error(`Kein Einzel-Ausschnitt für „${d.name}"`);
+          return { ...d, aiDataUrl: "", aiDataUrl2: "" };
+        }
         patch(d.key, { smoothing: true });
         let aiDataUrl = "";
         let aiDataUrl2 = "";
