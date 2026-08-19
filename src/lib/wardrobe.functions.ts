@@ -30,6 +30,19 @@ export const smoothItemImage = createServerFn({ method: "POST" })
           : " WICHTIG (Schuhe, Bild 1 – Draufsicht): Zeige das Paar Schuhe exakt von oben (Vogelperspektive, Kamera senkrecht über den Schuhen), beide Schuhe flach nebeneinander parallel liegend, Zehenspitzen nach oben, gleicher Abstand, symmetrisch und mittig. Keine Schrägansicht, keine Rotation, keine Perspektivverzerrung."
         : "";
 
+    const promptText =
+      (data.focus
+                    ? `Auf diesem Foto sind mehrere Kleidungsstücke zu sehen. Nimm AUSSCHLIESSLICH dieses eine Teil: "${data.focus}". Alle anderen Kleidungsstücke, Objekte und Personen müssen komplett verschwinden. `
+                    : "") +
+                  "Erzeuge ein professionelles E-Commerce-Produktfoto (Stockfoto-Look) des Kleidungsstücks. Entferne den kompletten Hintergrund und ersetze ihn durch einen komplett gleichmäßigen, reinweißen Studio-Hintergrund ohne Schatten, Textur, Möbel oder Raumdetails. Entferne Hände, Arme, Personen, Kleiderbügel und alles andere, was das Teil hält. Zeige das Teil freigestellt, mittig, gerade ausgerichtet und flach/glatt liegend wie im Online-Shop-Katalog, mit weichem, gleichmäßigem Studiolicht und scharfen sauberen Kanten. Wichtig: Das Kleidungsstück selbst darf NICHT verändert oder verschönert werden — Schnitt, Proportionen, Farbe, Muster, Material, Gebrauchsspuren, Flecken und Knötchen müssen exakt erhalten bleiben. Nur Halte-Falten glätten und den Hintergrund entfernen." +
+                  personRule +
+                  correctionRule +
+      shoeRule;
+
+    const mime = data.imageDataUrl.slice(5, data.imageDataUrl.indexOf(";")) || "image/jpeg";
+    const rawB64 = data.imageDataUrl.slice(data.imageDataUrl.indexOf(",") + 1);
+
+    // günstigste Stufe: Nano Banana 2 Lite (generateContent-Body, Standardauflösung)
     const res = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
       method: "POST",
       headers: {
@@ -38,26 +51,16 @@ export const smoothItemImage = createServerFn({ method: "POST" })
       },
       body: JSON.stringify({
         model: "google/gemini-3.1-flash-lite-image",
-        messages: [
+        contents: [
           {
             role: "user",
-            content: [
-              {
-                type: "text",
-                text:
-                  (data.focus
-                    ? `Auf diesem Foto sind mehrere Kleidungsstücke zu sehen. Nimm AUSSCHLIESSLICH dieses eine Teil: "${data.focus}". Alle anderen Kleidungsstücke, Objekte und Personen müssen komplett verschwinden. `
-                    : "") +
-                  "Erzeuge ein professionelles E-Commerce-Produktfoto (Stockfoto-Look) des Kleidungsstücks. Entferne den kompletten Hintergrund und ersetze ihn durch einen komplett gleichmäßigen, reinweißen Studio-Hintergrund ohne Schatten, Textur, Möbel oder Raumdetails. Entferne Hände, Arme, Personen, Kleiderbügel und alles andere, was das Teil hält. Zeige das Teil freigestellt, mittig, gerade ausgerichtet und flach/glatt liegend wie im Online-Shop-Katalog, mit weichem, gleichmäßigem Studiolicht und scharfen sauberen Kanten. Wichtig: Das Kleidungsstück selbst darf NICHT verändert oder verschönert werden — Schnitt, Proportionen, Farbe, Muster, Material, Gebrauchsspuren, Flecken und Knötchen müssen exakt erhalten bleiben. Nur Halte-Falten glätten und den Hintergrund entfernen." +
-                  personRule +
-                  correctionRule +
-                  shoeRule,
-              },
-              { type: "image_url", image_url: { url: data.imageDataUrl } },
+            parts: [
+              { text: promptText },
+              { inlineData: { mimeType: mime, data: rawB64 } },
             ],
           },
         ],
-        modalities: ["image", "text"],
+        generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
       }),
     });
 
