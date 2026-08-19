@@ -66,16 +66,19 @@ async function cropBox(
     i.onerror = reject;
     i.src = src;
   });
-  const pad = 0.03;
-  const x = Math.max(0, (box.x - pad) * img.width);
-  const y = Math.max(0, (box.y - pad) * img.height);
-  const w = Math.min(img.width - x, (box.w + pad * 2) * img.width);
-  const h = Math.min(img.height - y, (box.h + pad * 2) * img.height);
+  // Koordinaten direkt übernehmen, nur an die Bildkanten clampen (kein Zoom, keine Zentrierung)
+  const x0 = Math.min(Math.max(box.x, 0), 1) * img.width;
+  const y0 = Math.min(Math.max(box.y, 0), 1) * img.height;
+  const x1 = Math.min(Math.max(box.x + box.w, 0), 1) * img.width;
+  const y1 = Math.min(Math.max(box.y + box.h, 0), 1) * img.height;
+  const w = x1 - x0;
+  const h = y1 - y0;
   if (w < 8 || h < 8) return src;
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(w);
   canvas.height = Math.round(h);
-  canvas.getContext("2d")!.drawImage(img, x, y, w, h, 0, 0, canvas.width, canvas.height);
+  // 1:1-Kopie des Ausschnitts – gleiches Seitenverhältnis, keine Verzerrung
+  canvas.getContext("2d")!.drawImage(img, x0, y0, w, h, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL("image/jpeg", 0.92);
 }
 
