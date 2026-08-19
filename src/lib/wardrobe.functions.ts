@@ -201,11 +201,40 @@ export const detectItems = createServerFn({ method: "POST" })
       const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
       const list = Array.isArray(parsed?.items) ? parsed.items : [];
       const num = (v: any, d: number) => (typeof v === "number" && isFinite(v) ? v : d);
+      /** Nimmt die Modell-Koordinaten unverändert an, normalisiert nur Format/Skala. */
+      const normBox = (b: any) => {
+        if (!b) return null;
+        let x = num(b.x ?? b.xmin ?? b.x0 ?? b.left, NaN);
+        let y = num(b.y ?? b.ymin ?? b.y0 ?? b.top, NaN);
+        let w = num(b.w ?? b.width, NaN);
+        let h = num(b.h ?? b.height, NaN);
+        const x2 = num(b.x2 ?? b.xmax ?? b.right, NaN);
+        const y2 = num(b.y2 ?? b.ymax ?? b.bottom, NaN);
+        if (!isFinite(w) && isFinite(x2)) w = x2 - x;
+        if (!isFinite(h) && isFinite(y2)) h = y2 - y;
+        if (![x, y, w, h].every((v) => isFinite(v))) return null;
+        // Skala 0–1000 (Gemini-Konvention) oder 0–100 auf 0–1 bringen
+        const maxV = Math.max(x + w, y + h);
+        if (maxV > 1.5) {
+          const scale = maxV > 100 ? 1000 : 100;
+          x /= scale; y /= scale; w /= scale; h /= scale;
+        }
+        // manche Modelle liefern w/h faktisch als rechte/untere Kante
+        if (w > x && h > y && x + w > 1.05 && w <= 1 && h <= 1) {
+          w = w - x;
+          h = h - y;
+        }
+        x = Math.min(1, Math.max(0, x));
+        y = Math.min(1, Math.max(0, y));
+        w = Math.min(1 - x, Math.max(0.02, w));
+        h = Math.min(1 - y, Math.max(0.02, h));
+        return { x, y, w, h };
+      };
       const SHOE_WORDS =
         /(schuh|sneaker|sandale|pantolette|badeschlappen|flipflop|flip-flop|stiefel|boots?|pumps|heels?|absatz|ballerina|loafer|slipper|hausschuh|mokassin|clog|espadrille|socke|strumpf|haarband|haarreif|scrunchie|haarspange)/i;
       const items: DetectedItem[] = list.slice(0, 7).map((p: any) => {
         const match = existing.find((e) => e.id === p?.matchId);
-        const b = p?.box;
+        const b = normBox(p?.box);
         return {
           category: ALLOWED.includes(p?.category) ? (p.category as Cat) : "sonstiges",
           name: typeof p?.name === "string" ? p.name.slice(0, 60) : "Neues Teil",
@@ -213,14 +242,7 @@ export const detectItems = createServerFn({ method: "POST" })
           description: typeof p?.description === "string" ? p.description.slice(0, 200) : "",
           matchId: match ? match.id : null,
           matchName: match ? match.name : null,
-          box: b
-            ? {
-                x: Math.min(1, Math.max(0, num(b.x, 0))),
-                y: Math.min(1, Math.max(0, num(b.y, 0))),
-                w: Math.min(1, Math.max(0.02, num(b.w, 1))),
-                h: Math.min(1, Math.max(0.02, num(b.h, 1))),
-              }
-            : null,
+          box: b,
         };
       }).filter(
         (it: DetectedItem) => it.category !== ("schuhe" as Cat) && !SHOE_WORDS.test(it.name),
