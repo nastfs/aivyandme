@@ -162,7 +162,7 @@ export const detectItems = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ items: DetectedItem[] }> => {
     const fallback = {
       items: [
-        { category: "sonstiges" as Cat, name: "Neues Teil", color: "", description: "das Kleidungsstück" },
+        { category: "sonstiges" as Cat, name: "Neues Teil", color: "", description: "das Kleidungsstück", confidence: 0.5 },
       ],
     };
     const apiKey = process.env.LOVABLE_API_KEY;
