@@ -52,6 +52,12 @@ type Draft = {
   sourceDataUrl: string;
   /** aus dem Originalfoto zugeschnittener Ausschnitt (ohne KI) */
   cropDataUrl: string;
+  /** Sicherheit der Erkennung (0–1) */
+  confidence: number;
+  /** kurzer Inline-Hinweis bei unsicherer Erkennung */
+  hint: string;
+  /** Inline-Korrektur läuft gerade */
+  hintBusy: boolean;
 };
 
 /** Schneidet eine normalisierte Bounding-Box aus einer Data-URL aus. */
