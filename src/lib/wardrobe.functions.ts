@@ -245,6 +245,7 @@ export const detectItems = createServerFn({ method: "POST" })
           matchId: match ? match.id : null,
           matchName: match ? match.name : null,
           box: b,
+          confidence: Math.min(1, Math.max(0, num(p?.confidence, 0.7))),
         };
       }).filter(
         (it: DetectedItem) => it.category !== ("schuhe" as Cat) && !SHOE_WORDS.test(it.name),
