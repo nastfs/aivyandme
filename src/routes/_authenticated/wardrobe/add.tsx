@@ -161,6 +161,9 @@ function AddItem() {
         // Kein Gruppenfoto als Referenz — nur der Einzel-Crop dieses Teils
         sourceDataUrl: "",
         cropDataUrl: crops[i] ?? url,
+        confidence: typeof (it as any).confidence === "number" ? (it as any).confidence : 0.7,
+        hint: "",
+        hintBusy: false,
       }));
       setDrafts((prev) => (append ? [...prev, ...next] : next));
       if (!items.length) {
