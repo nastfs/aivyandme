@@ -144,6 +144,8 @@ export type DetectedItem = {
   matchName?: string | null;
   /** normalisierte Bounding-Box (0–1) im Originalfoto für den Zuschnitt */
   box?: { x: number; y: number; w: number; h: number } | null;
+  /** Sicherheit der Erkennung, 0–1 */
+  confidence: number;
 };
 
 type ExistingItem = { id: string; name: string; category: string; color: string };
