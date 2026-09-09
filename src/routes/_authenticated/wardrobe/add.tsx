@@ -52,6 +52,12 @@ type Draft = {
   sourceDataUrl: string;
   /** aus dem Originalfoto zugeschnittener Ausschnitt (ohne KI) */
   cropDataUrl: string;
+  /** Sicherheit der Erkennung (0–1) */
+  confidence: number;
+  /** kurzer Inline-Hinweis bei unsicherer Erkennung */
+  hint: string;
+  /** Inline-Korrektur läuft gerade */
+  hintBusy: boolean;
 };
 
 /** Schneidet eine normalisierte Bounding-Box aus einer Data-URL aus. */
@@ -155,6 +161,9 @@ function AddItem() {
         // Kein Gruppenfoto als Referenz — nur der Einzel-Crop dieses Teils
         sourceDataUrl: "",
         cropDataUrl: crops[i] ?? url,
+        confidence: typeof (it as any).confidence === "number" ? (it as any).confidence : 0.7,
+        hint: "",
+        hintBusy: false,
       }));
       setDrafts((prev) => (append ? [...prev, ...next] : next));
       if (!items.length) {
@@ -227,6 +236,29 @@ function AddItem() {
   function removeDraft(key: string) {
     setDrafts((ds) => ds.filter((d) => d.key !== key));
     toast("Vorschlag verworfen");
+  }
+
+  /** Inline-Korrektur direkt auf der Karte (ohne Dialog), z. B. „Cardigan offen“. */
+  async function applyHint(key: string) {
+    const d = drafts.find((x) => x.key === key);
+    const text = d?.hint.trim();
+    if (!d || !text || text === d.correction) return;
+    patch(key, { hintBusy: true });
+    try {
+      const refined = await refine({
+        data: { correction: text, name: d.name, category: d.category, color: d.color },
+      });
+      patch(key, {
+        name: refined.name,
+        category: refined.category as CategoryValue,
+        color: refined.color,
+        correction: text,
+        hintBusy: false,
+      });
+    } catch (e: any) {
+      patch(key, { hintBusy: false });
+      toast.error(e.message ?? "Korrektur fehlgeschlagen");
+    }
   }
 
   async function applyCorrection() {
@@ -533,6 +565,19 @@ function AddItem() {
                 onChange={(e) => patch(d.key, { name: e.target.value })}
                 placeholder="z. B. Beiger Blazer"
               />
+              {d.confidence < 0.65 && (
+                <Input
+                  value={d.hint}
+                  onChange={(e) => patch(d.key, { hint: e.target.value })}
+                  onBlur={() => void applyHint(d.key)}
+                  disabled={d.hintBusy}
+                  placeholder="Kurzer Hinweis? z. B. 'Cardigan offen'"
+                  className="h-9 border-dashed text-xs text-muted-foreground"
+                />
+              )}
+              {d.hintBusy && (
+                <p className="text-xs text-muted-foreground">Hinweis wird übernommen…</p>
+              )}
             </div>
 
             <div className="space-y-2">
