@@ -565,6 +565,19 @@ function AddItem() {
                 onChange={(e) => patch(d.key, { name: e.target.value })}
                 placeholder="z. B. Beiger Blazer"
               />
+              {d.confidence < 0.65 && (
+                <Input
+                  value={d.hint}
+                  onChange={(e) => patch(d.key, { hint: e.target.value })}
+                  onBlur={() => void applyHint(d.key)}
+                  disabled={d.hintBusy}
+                  placeholder="Kurzer Hinweis? z. B. 'Cardigan offen'"
+                  className="h-9 border-dashed text-xs text-muted-foreground"
+                />
+              )}
+              {d.hintBusy && (
+                <p className="text-xs text-muted-foreground">Hinweis wird übernommen…</p>
+              )}
             </div>
 
             <div className="space-y-2">
