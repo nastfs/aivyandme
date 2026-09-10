@@ -443,13 +443,31 @@ function AddItem() {
       </div>
 
       {dataUrl && (
-        <div className="mb-4 flex items-center gap-2 text-sm text-primary/80">
-          <Sparkles className="h-4 w-4" />
-          {analyzing
-            ? "KI analysiert dein Foto…"
-            : multi
-              ? `${drafts.filter((d) => d.include).length} von ${drafts.length} Teilen werden angelegt`
-              : "Passt das? Ändere gerne noch:"}
+        <div className="mb-4 flex items-center gap-3 text-sm text-primary/80">
+          {analyzing ? (
+            <>
+              <div className="flex items-end gap-2" aria-hidden="true">
+                <div
+                  className="h-10 w-10 animate-[blob-breathe_2.4s_ease-in-out_infinite] bg-primary"
+                  style={{ borderRadius: "60% 40% 44% 56% / 46% 58% 42% 54%" }}
+                />
+                <div
+                  className="h-6 w-6 animate-[blob-breathe_2.4s_ease-in-out_120ms_infinite] bg-accent"
+                  style={{ borderRadius: "44% 56% 60% 40% / 54% 46% 58% 42%" }}
+                />
+              </div>
+              <span>KI analysiert dein Foto…</span>
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" />
+              <span>
+                {multi
+                  ? `${drafts.filter((d) => d.include).length} von ${drafts.length} Teilen werden angelegt`
+                  : "Passt das? Ändere gerne noch:"}
+              </span>
+            </>
+          )}
         </div>
       )}
 
