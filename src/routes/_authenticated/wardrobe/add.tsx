@@ -443,13 +443,31 @@ function AddItem() {
       </div>
 
       {dataUrl && (
-        <div className="mb-4 flex items-center gap-2 text-sm text-primary/80">
-          <Sparkles className="h-4 w-4" />
-          {analyzing
-            ? "KI analysiert dein Foto…"
-            : multi
-              ? `${drafts.filter((d) => d.include).length} von ${drafts.length} Teilen werden angelegt`
-              : "Passt das? Ändere gerne noch:"}
+        <div className="mb-4 flex items-center gap-3 text-sm text-primary/80">
+          {analyzing ? (
+            <>
+              <div className="flex items-end gap-2" aria-hidden="true">
+                <div
+                  className="h-10 w-10 animate-[blob-breathe_2.4s_ease-in-out_infinite] bg-primary"
+                  style={{ borderRadius: "60% 40% 44% 56% / 46% 58% 42% 54%" }}
+                />
+                <div
+                  className="h-6 w-6 animate-[blob-breathe_2.4s_ease-in-out_120ms_infinite] bg-accent"
+                  style={{ borderRadius: "44% 56% 60% 40% / 54% 46% 58% 42%" }}
+                />
+              </div>
+              <span>KI analysiert dein Foto…</span>
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" />
+              <span>
+                {multi
+                  ? `${drafts.filter((d) => d.include).length} von ${drafts.length} Teilen werden angelegt`
+                  : "Passt das? Ändere gerne noch:"}
+              </span>
+            </>
+          )}
         </div>
       )}
 
@@ -475,8 +493,12 @@ function AddItem() {
       )}
 
       <div className="space-y-4">
-        {(phase === "done" ? [] : drafts).map((d) => (
-          <div key={d.key} className="relative space-y-4 rounded-3xl bg-card p-5 shadow-sm">
+        {(phase === "done" ? [] : drafts).map((d, i) => (
+          <div
+            key={d.key}
+            className="relative space-y-4 rounded-3xl bg-card p-5 shadow-sm animate-[card-enter_0.4s_ease-out_forwards]"
+            style={{ animationDelay: `${i * 80}ms` }}
+          >
             <button
               type="button"
               onClick={() => removeDraft(d.key)}
@@ -558,26 +580,34 @@ function AddItem() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Name</Label>
+            <div>
+              <Label className="mb-2 block">Name</Label>
               <Input
                 value={d.name}
                 onChange={(e) => patch(d.key, { name: e.target.value })}
                 placeholder="z. B. Beiger Blazer"
               />
-              {d.confidence < 0.65 && (
-                <Input
-                  value={d.hint}
-                  onChange={(e) => patch(d.key, { hint: e.target.value })}
-                  onBlur={() => void applyHint(d.key)}
-                  disabled={d.hintBusy}
-                  placeholder="Kurzer Hinweis? z. B. 'Cardigan offen'"
-                  className="h-9 border-dashed text-xs text-muted-foreground"
-                />
-              )}
-              {d.hintBusy && (
-                <p className="text-xs text-muted-foreground">Hinweis wird übernommen…</p>
-              )}
+              <div
+                className={`grid transition-all duration-200 ease-out ${
+                  d.confidence < 0.65
+                    ? "mt-2 grid-rows-[1fr] opacity-100"
+                    : "grid-rows-[0fr] opacity-0"
+                }`}
+              >
+                <div className="overflow-hidden">
+                  <Input
+                    value={d.hint}
+                    onChange={(e) => patch(d.key, { hint: e.target.value })}
+                    onBlur={() => void applyHint(d.key)}
+                    disabled={d.hintBusy}
+                    placeholder="Kurzer Hinweis? z. B. 'Cardigan offen'"
+                    className="h-9 border-dashed text-xs text-muted-foreground"
+                  />
+                  {d.hintBusy && (
+                    <p className="mt-1.5 text-xs text-muted-foreground">Hinweis wird übernommen…</p>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
