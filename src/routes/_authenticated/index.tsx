@@ -1,11 +1,25 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { signedUrlsMap, displayPath } from "@/lib/storage";
 import { categoryLabel } from "@/lib/categories";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
-import { Bell, Sun } from "lucide-react";
+import {
+  Bell,
+  Sun,
+  Cloud,
+  CloudFog,
+  CloudLightning,
+  CloudRain,
+  CloudSnow,
+  CloudSun,
+  Loader2,
+  MapPin,
+  Search,
+  X,
+} from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/")({
   component: Home,
