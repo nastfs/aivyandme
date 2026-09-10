@@ -493,8 +493,12 @@ function AddItem() {
       )}
 
       <div className="space-y-4">
-        {(phase === "done" ? [] : drafts).map((d) => (
-          <div key={d.key} className="relative space-y-4 rounded-3xl bg-card p-5 shadow-sm">
+        {(phase === "done" ? [] : drafts).map((d, i) => (
+          <div
+            key={d.key}
+            className="relative space-y-4 rounded-3xl bg-card p-5 shadow-sm animate-[card-enter_0.4s_ease-out_forwards]"
+            style={{ animationDelay: `${i * 80}ms` }}
+          >
             <button
               type="button"
               onClick={() => removeDraft(d.key)}
