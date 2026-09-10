@@ -580,26 +580,34 @@ function AddItem() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Name</Label>
+            <div>
+              <Label className="mb-2 block">Name</Label>
               <Input
                 value={d.name}
                 onChange={(e) => patch(d.key, { name: e.target.value })}
                 placeholder="z. B. Beiger Blazer"
               />
-              {d.confidence < 0.65 && (
-                <Input
-                  value={d.hint}
-                  onChange={(e) => patch(d.key, { hint: e.target.value })}
-                  onBlur={() => void applyHint(d.key)}
-                  disabled={d.hintBusy}
-                  placeholder="Kurzer Hinweis? z. B. 'Cardigan offen'"
-                  className="h-9 border-dashed text-xs text-muted-foreground"
-                />
-              )}
-              {d.hintBusy && (
-                <p className="text-xs text-muted-foreground">Hinweis wird übernommen…</p>
-              )}
+              <div
+                className={`grid transition-all duration-200 ease-out ${
+                  d.confidence < 0.65
+                    ? "mt-2 grid-rows-[1fr] opacity-100"
+                    : "grid-rows-[0fr] opacity-0"
+                }`}
+              >
+                <div className="overflow-hidden">
+                  <Input
+                    value={d.hint}
+                    onChange={(e) => patch(d.key, { hint: e.target.value })}
+                    onBlur={() => void applyHint(d.key)}
+                    disabled={d.hintBusy}
+                    placeholder="Kurzer Hinweis? z. B. 'Cardigan offen'"
+                    className="h-9 border-dashed text-xs text-muted-foreground"
+                  />
+                  {d.hintBusy && (
+                    <p className="mt-1.5 text-xs text-muted-foreground">Hinweis wird übernommen…</p>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
