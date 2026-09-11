@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { signedUrlsMap, displayPath } from "@/lib/storage";
 import { categoryLabel } from "@/lib/categories";
+import { suggestOutfit, type SuggestItem } from "@/lib/suggest-outfit";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import {
@@ -17,6 +18,7 @@ import {
   CloudSun,
   Loader2,
   MapPin,
+  RefreshCw,
   Search,
   X,
 } from "lucide-react";
