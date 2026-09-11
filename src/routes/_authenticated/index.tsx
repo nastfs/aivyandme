@@ -229,6 +229,36 @@ function Home() {
 
 const LOCATION_KEY = "aivy-location";
 
+/** Optionale Temperatur aus dem gespeicherten Ort (kein Pflichtfaktor). */
+function useCachedTemperature() {
+  const [temp, setTemp] = useState<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    try {
+      const raw = localStorage.getItem(LOCATION_KEY);
+      if (!raw) return;
+      const loc = JSON.parse(raw);
+      if (!loc?.lat || !loc?.lon) return;
+      fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m`,
+      )
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (active && typeof d?.current?.temperature_2m === "number") setTemp(d.current.temperature_2m);
+        })
+        .catch(() => {});
+    } catch {
+      // ignore
+    }
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return temp;
+}
+
 type SavedLocation = {
   lat: number;
   lon: number;
