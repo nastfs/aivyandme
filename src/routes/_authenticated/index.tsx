@@ -364,6 +364,7 @@ function WeatherWidget() {
     query,
     setQuery,
     results,
+    setResults,
     searching,
     searchLocation,
     selectResult,
