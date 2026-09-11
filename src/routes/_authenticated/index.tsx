@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { signedUrlsMap, displayPath } from "@/lib/storage";
 import { categoryLabel } from "@/lib/categories";
+import { suggestOutfit, type SuggestItem } from "@/lib/suggest-outfit";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import {
@@ -17,6 +18,7 @@ import {
   CloudSun,
   Loader2,
   MapPin,
+  RefreshCw,
   Search,
   X,
 } from "lucide-react";
@@ -33,22 +35,18 @@ export const Route = createFileRoute("/_authenticated/")({
 
 function Home() {
   const { user } = Route.useRouteContext();
-  const name =
-    (user?.user_metadata as any)?.display_name ||
-    user?.email?.split("@")[0] ||
-    "Willkommen";
 
   const today = format(new Date(), "yyyy-MM-dd");
 
   const { data } = useQuery({
     queryKey: ["home"],
     queryFn: async () => {
-      const [{ data: items }, { data: plan }, { data: recent }] = await Promise.all([
+      const [{ data: items }, { data: plan }, { data: recent }, { data: profile }] = await Promise.all([
         supabase
           .from("wardrobe_items")
-          .select("id, image_url, ai_image_url, use_ai_image, category")
+          .select("id, name, image_url, ai_image_url, use_ai_image, category")
           .order("created_at", { ascending: false })
-          .limit(8),
+          .limit(200),
         supabase
           .from("outfit_plans")
           .select("outfit_id, outfits(name, outfit_items(item_id, wardrobe_items(image_url, ai_image_url, use_ai_image)))")
@@ -59,6 +57,7 @@ function Home() {
           .select("id, name, outfit_items(wardrobe_items(image_url, ai_image_url, use_ai_image))")
           .order("created_at", { ascending: false })
           .limit(4),
+        supabase.from("profiles").select("display_name").eq("id", user!.id).maybeSingle(),
       ]);
       const paths: string[] = [];
       items?.forEach((i) => i.image_url && paths.push(displayPath(i)));
@@ -69,20 +68,33 @@ function Home() {
         o.outfit_items?.forEach((oi: any) => oi.wardrobe_items && paths.push(displayPath(oi.wardrobe_items))),
       );
       const urls = await signedUrlsMap(paths);
-      return { items: items ?? [], plan, recent: recent ?? [], urls };
+      return { items: items ?? [], plan, recent: recent ?? [], urls, profile };
     },
   });
+
+  const displayName = data?.profile?.display_name?.trim();
+  const greeting = displayName ? `Guten Tag, ${displayName}` : "Guten Tag";
+
+  const temp = useCachedTemperature();
+  const allItems = (data?.items ?? []) as SuggestItem[];
+  const [suggestion, setSuggestion] = useState<SuggestItem[]>([]);
+
+  useEffect(() => {
+    if (allItems.length) setSuggestion(suggestOutfit(allItems, temp));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.items, temp]);
+
+  const plannedOutfit = (data?.plan as any)?.outfits;
 
   return (
     <div className="px-6 pt-10">
       <header className="mb-8 flex items-start justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-4xl leading-tight">
-            <span className="font-serif">Guten Tag, {name}</span>
+            <span className="font-serif">{greeting}</span>
             <Sun className="h-6 w-6 text-accent-foreground" strokeWidth={1.5} />
           </div>
           <p className="mt-3 text-sm text-primary/70">Heutige Empfehlung</p>
-          <p className="text-lg">Bereit für einen stilvollen Tag?</p>
           <WeatherWidget />
         </div>
         <button className="rounded-full border border-border p-2">
@@ -90,18 +102,19 @@ function Home() {
         </button>
       </header>
 
-      {(data?.plan as any)?.outfits && (
-        <section className="mb-8">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xl">Dein Outfit für heute</h2>
-            <span className="text-xs text-muted-foreground">
-              {format(new Date(), "EEEE, d. MMMM", { locale: de })}
-            </span>
-          </div>
+      <section className="mb-8">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-xl">Dein Outfit für heute</h2>
+          <span className="text-xs text-muted-foreground">
+            {format(new Date(), "EEEE, d. MMMM", { locale: de })}
+          </span>
+        </div>
+
+        {plannedOutfit ? (
           <div className="rounded-3xl bg-card p-4 shadow-sm">
-            <p className="mb-3 font-medium">{(data?.plan as any).outfits.name}</p>
+            <p className="mb-3 font-medium">{plannedOutfit.name}</p>
             <div className="flex gap-2 overflow-x-auto">
-              {(data?.plan as any).outfits.outfit_items?.map((oi: any, i: number) => (
+              {plannedOutfit.outfit_items?.map((oi: any, i: number) => (
                 <img
                   key={i}
                   src={data?.urls[oi.wardrobe_items ? displayPath(oi.wardrobe_items) : ""] ?? ""}
@@ -111,8 +124,40 @@ function Home() {
               ))}
             </div>
           </div>
-        </section>
-      )}
+        ) : suggestion.length ? (
+          <div className="rounded-3xl bg-card p-4 shadow-sm">
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {suggestion.map((it) => (
+                <Link key={it.id} to="/wardrobe/$id" params={{ id: it.id }} className="w-24 shrink-0">
+                  <div className="aspect-square overflow-hidden rounded-2xl bg-secondary">
+                    {data?.urls[displayPath(it)] && (
+                      <img
+                        src={data.urls[displayPath(it)]}
+                        alt={it.name ?? categoryLabel(it.category)}
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                  </div>
+                  <p className="mt-1 truncate text-center text-xs">
+                    {it.name || categoryLabel(it.category)}
+                  </p>
+                </Link>
+              ))}
+            </div>
+            <button
+              onClick={() => setSuggestion(suggestOutfit(allItems, temp))}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm transition hover:bg-secondary"
+            >
+              <RefreshCw className="h-4 w-4" strokeWidth={1.5} /> Neu vorschlagen
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-3xl bg-card p-5 text-center text-sm text-muted-foreground shadow-sm">
+            Füge ein paar Teile hinzu — dann schlagen wir dir hier täglich ein Outfit vor.
+          </div>
+        )}
+      </section>
+
 
       <section className="mb-8">
         <div className="mb-3 flex items-center justify-between">
@@ -183,6 +228,36 @@ function Home() {
 }
 
 const LOCATION_KEY = "aivy-location";
+
+/** Optionale Temperatur aus dem gespeicherten Ort (kein Pflichtfaktor). */
+function useCachedTemperature() {
+  const [temp, setTemp] = useState<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    try {
+      const raw = localStorage.getItem(LOCATION_KEY);
+      if (!raw) return;
+      const loc = JSON.parse(raw);
+      if (!loc?.lat || !loc?.lon) return;
+      fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m`,
+      )
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (active && typeof d?.current?.temperature_2m === "number") setTemp(d.current.temperature_2m);
+        })
+        .catch(() => {});
+    } catch {
+      // ignore
+    }
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return temp;
+}
 
 type SavedLocation = {
   lat: number;
