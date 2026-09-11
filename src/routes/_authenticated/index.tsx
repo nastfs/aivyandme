@@ -346,6 +346,7 @@ function useWeather() {
     query,
     setQuery,
     results,
+    setResults,
     searching,
     searchLocation,
     selectResult,
