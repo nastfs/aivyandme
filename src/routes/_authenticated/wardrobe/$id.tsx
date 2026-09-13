@@ -32,6 +32,10 @@ function ItemDetail() {
   const [name, setName] = useState("");
   const [color, setColor] = useState("");
   const [category, setCategory] = useState<CategoryValue>("sonstiges");
+  const [initialName, setInitialName] = useState("");
+  const [initialColor, setInitialColor] = useState("");
+  const [initialCategory, setInitialCategory] = useState<CategoryValue>("sonstiges");
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [smoothing, setSmoothing] = useState(false);
   const [preview, setPreview] = useState<string>("");
