@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      outfit_feedback: {
+        Row: {
+          created_at: string
+          id: string
+          item_ids: string[]
+          liked: boolean
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_ids?: string[]
+          liked: boolean
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_ids?: string[]
+          liked?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
       outfit_items: {
         Row: {
           item_id: string
