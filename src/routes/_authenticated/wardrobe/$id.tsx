@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { signedUrl } from "@/lib/storage";
 import { smoothItemImage } from "@/lib/wardrobe.functions";
 import { normalizeItemImages } from "@/lib/normalize-images";
-import { CATEGORIES, type CategoryValue } from "@/lib/categories";
+import { CATEGORIES, categoryLabel, type CategoryValue } from "@/lib/categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
