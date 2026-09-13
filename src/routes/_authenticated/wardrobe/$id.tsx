@@ -10,7 +10,7 @@ import { CATEGORIES, type CategoryValue } from "@/lib/categories";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ChevronLeft, Sparkles, Trash2, Shirt, Check } from "lucide-react";
+import { ChevronLeft, Sparkles, Trash2, Shirt, Check, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/wardrobe/$id")({
