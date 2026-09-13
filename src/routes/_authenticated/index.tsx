@@ -81,11 +81,59 @@ function Home() {
   const temp = useCachedTemperature();
   const allItems = (data?.items ?? []) as SuggestItem[];
   const [suggestion, setSuggestion] = useState<SuggestItem[]>([]);
+  const [feedbackSent, setFeedbackSent] = useState(false);
+
+  const { data: feedback, refetch: refetchFeedback } = useQuery({
+    queryKey: ["outfit-feedback"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("outfit_feedback")
+        .select("item_ids, liked")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      return data ?? [];
+    },
+  });
+
+  const scores = useMemo<ItemScores>(() => {
+    const s: ItemScores = {};
+    feedback?.forEach((f) => {
+      (f.item_ids ?? []).forEach((id: string) => {
+        s[id] = (s[id] ?? 0) + (f.liked ? 1 : -1);
+      });
+    });
+    return s;
+  }, [feedback]);
 
   useEffect(() => {
-    if (allItems.length) setSuggestion(suggestOutfit(allItems, temp));
+    if (allItems.length) {
+      setSuggestion(suggestOutfit(allItems, temp, scores));
+      setFeedbackSent(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.items, temp]);
+  }, [data?.items, temp, scores]);
+
+  function newSuggestion() {
+    setSuggestion(suggestOutfit(allItems, temp, scores));
+    setFeedbackSent(false);
+  }
+
+  async function rate(liked: boolean) {
+    if (feedbackSent || !suggestion.length) return;
+    setFeedbackSent(true);
+    const { error } = await supabase.from("outfit_feedback").insert({
+      user_id: user!.id,
+      item_ids: suggestion.map((i) => i.id),
+      liked,
+    });
+    if (error) {
+      setFeedbackSent(false);
+      toast.error("Konnte nicht gespeichert werden");
+      return;
+    }
+    toast.success("Danke, merken wir uns");
+    refetchFeedback();
+  }
 
   /** Ersetzt genau ein Teil durch eine Alternative derselben Kategorie. */
   function swapItem(index: number) {
