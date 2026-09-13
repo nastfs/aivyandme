@@ -79,14 +79,31 @@ function ItemDetail() {
         .update({ name: name || null, color: color || null, category })
         .eq("id", id);
       if (error) throw error;
+      setInitialName(name);
+      setInitialColor(color);
+      setInitialCategory(category);
+      setEditing(false);
       toast.success("Änderungen gespeichert");
       qc.invalidateQueries();
-      navigate({ to: "/wardrobe" });
     } catch (e: any) {
       toast.error(e.message ?? "Speichern fehlgeschlagen");
     } finally {
       setSaving(false);
     }
+  }
+
+  function onEdit() {
+    setName(initialName);
+    setColor(initialColor);
+    setCategory(initialCategory);
+    setEditing(true);
+  }
+
+  function onCancel() {
+    setName(initialName);
+    setColor(initialColor);
+    setCategory(initialCategory);
+    setEditing(false);
   }
 
   async function onDelete() {
