@@ -1,15 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { signedUrlsMap, displayPath } from "@/lib/storage";
 import { categoryLabel } from "@/lib/categories";
-import { suggestOutfit, type SuggestItem } from "@/lib/suggest-outfit";
+import { suggestOutfit, type ItemScores, type SuggestItem } from "@/lib/suggest-outfit";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import {
   Bell,
   Sun,
+  Heart,
   ArrowLeftRight,
   Cloud,
   CloudFog,
