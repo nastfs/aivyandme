@@ -60,9 +60,15 @@ function ItemDetail() {
 
   useEffect(() => {
     if (!data?.item) return;
-    setName(data.item.name ?? "");
-    setColor(data.item.color ?? "");
-    setCategory(data.item.category as CategoryValue);
+    const nextName = data.item.name ?? "";
+    const nextColor = data.item.color ?? "";
+    const nextCategory = data.item.category as CategoryValue;
+    setName(nextName);
+    setColor(nextColor);
+    setCategory(nextCategory);
+    setInitialName(nextName);
+    setInitialColor(nextColor);
+    setInitialCategory(nextCategory);
   }, [data?.item]);
 
   async function onSave() {
