@@ -1,15 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { signedUrlsMap, displayPath } from "@/lib/storage";
 import { categoryLabel } from "@/lib/categories";
-import { suggestOutfit, type SuggestItem } from "@/lib/suggest-outfit";
+import { suggestOutfit, type ItemScores, type SuggestItem } from "@/lib/suggest-outfit";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import {
   Bell,
   Sun,
+  Heart,
   ArrowLeftRight,
   Cloud,
   CloudFog,
@@ -79,11 +81,59 @@ function Home() {
   const temp = useCachedTemperature();
   const allItems = (data?.items ?? []) as SuggestItem[];
   const [suggestion, setSuggestion] = useState<SuggestItem[]>([]);
+  const [feedbackSent, setFeedbackSent] = useState(false);
+
+  const { data: feedback, refetch: refetchFeedback } = useQuery({
+    queryKey: ["outfit-feedback"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("outfit_feedback")
+        .select("item_ids, liked")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      return data ?? [];
+    },
+  });
+
+  const scores = useMemo<ItemScores>(() => {
+    const s: ItemScores = {};
+    feedback?.forEach((f) => {
+      (f.item_ids ?? []).forEach((id: string) => {
+        s[id] = (s[id] ?? 0) + (f.liked ? 1 : -1);
+      });
+    });
+    return s;
+  }, [feedback]);
 
   useEffect(() => {
-    if (allItems.length) setSuggestion(suggestOutfit(allItems, temp));
+    if (allItems.length) {
+      setSuggestion(suggestOutfit(allItems, temp, scores));
+      setFeedbackSent(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.items, temp]);
+  }, [data?.items, temp, scores]);
+
+  function newSuggestion() {
+    setSuggestion(suggestOutfit(allItems, temp, scores));
+    setFeedbackSent(false);
+  }
+
+  async function rate(liked: boolean) {
+    if (feedbackSent || !suggestion.length) return;
+    setFeedbackSent(true);
+    const { error } = await supabase.from("outfit_feedback").insert({
+      user_id: user!.id,
+      item_ids: suggestion.map((i) => i.id),
+      liked,
+    });
+    if (error) {
+      setFeedbackSent(false);
+      toast.error("Konnte nicht gespeichert werden");
+      return;
+    }
+    toast.success("Danke, merken wir uns");
+    refetchFeedback();
+  }
 
   /** Ersetzt genau ein Teil durch eine Alternative derselben Kategorie. */
   function swapItem(index: number) {
@@ -180,11 +230,27 @@ function Home() {
               ))}
             </div>
             <button
-              onClick={() => setSuggestion(suggestOutfit(allItems, temp))}
+              onClick={newSuggestion}
               className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm transition hover:bg-secondary"
             >
               <RefreshCw className="h-4 w-4" strokeWidth={1.5} /> Neu vorschlagen
             </button>
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                onClick={() => rate(true)}
+                disabled={feedbackSent}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-secondary disabled:opacity-40"
+              >
+                <Heart className="h-3.5 w-3.5" strokeWidth={1.5} /> Gefällt mir
+              </button>
+              <button
+                onClick={() => rate(false)}
+                disabled={feedbackSent}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-secondary disabled:opacity-40"
+              >
+                <X className="h-3.5 w-3.5" strokeWidth={1.5} /> Nicht mein Stil
+              </button>
+            </div>
           </div>
         ) : (
           <div className="rounded-3xl bg-card p-5 text-center text-sm text-muted-foreground shadow-sm">
