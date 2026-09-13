@@ -10,6 +10,7 @@ import { de } from "date-fns/locale";
 import {
   Bell,
   Sun,
+  ArrowLeftRight,
   Cloud,
   CloudFog,
   CloudLightning,
@@ -83,6 +84,27 @@ function Home() {
     if (allItems.length) setSuggestion(suggestOutfit(allItems, temp));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.items, temp]);
+
+  /** Ersetzt genau ein Teil durch eine Alternative derselben Kategorie. */
+  function swapItem(index: number) {
+    setSuggestion((prev) => {
+      const item = prev[index];
+      if (!item) return prev;
+      const others = new Set(prev.filter((_, i) => i !== index).map((i) => i.id));
+      const alternatives = allItems.filter(
+        (i) => i.category === item.category && i.id !== item.id && !others.has(i.id),
+      );
+      if (!alternatives.length) return prev;
+      const alt = alternatives[Math.floor(Math.random() * alternatives.length)];
+      const next = [...prev];
+      next[index] = alt;
+      return next;
+    });
+  }
+
+  function hasAlternative(item: SuggestItem) {
+    return allItems.some((i) => i.category === item.category && i.id !== item.id);
+  }
 
   const plannedOutfit = (data?.plan as any)?.outfits;
 
