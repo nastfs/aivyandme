@@ -230,11 +230,27 @@ function Home() {
               ))}
             </div>
             <button
-              onClick={() => setSuggestion(suggestOutfit(allItems, temp))}
+              onClick={newSuggestion}
               className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm transition hover:bg-secondary"
             >
               <RefreshCw className="h-4 w-4" strokeWidth={1.5} /> Neu vorschlagen
             </button>
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                onClick={() => rate(true)}
+                disabled={feedbackSent}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-secondary disabled:opacity-40"
+              >
+                <Heart className="h-3.5 w-3.5" strokeWidth={1.5} /> Gefällt mir
+              </button>
+              <button
+                onClick={() => rate(false)}
+                disabled={feedbackSent}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-secondary disabled:opacity-40"
+              >
+                <X className="h-3.5 w-3.5" strokeWidth={1.5} /> Nicht mein Stil
+              </button>
+            </div>
           </div>
         ) : (
           <div className="rounded-3xl bg-card p-5 text-center text-sm text-muted-foreground shadow-sm">
