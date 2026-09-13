@@ -305,35 +305,64 @@ function ItemDetail() {
       </div>
 
       <div className="space-y-4 rounded-3xl bg-card p-5 shadow-sm">
-        <div className="space-y-2">
-          <Label htmlFor="name">Name</Label>
-          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Beiger Blazer" />
-        </div>
+        {editing ? (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Beiger Blazer" />
+            </div>
 
-        <div className="space-y-2">
-          <Label>Kategorie</Label>
-          <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c.value}
-                type="button"
-                onClick={() => setCategory(c.value)}
-                className={`rounded-full border px-3 py-1.5 text-sm ${category === c.value ? "border-primary bg-accent" : "border-border bg-background"}`}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-        </div>
+            <div className="space-y-2">
+              <Label>Kategorie</Label>
+              <div className="flex flex-wrap gap-2">
+                {CATEGORIES.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => setCategory(c.value)}
+                    className={`rounded-full border px-3 py-1.5 text-sm ${category === c.value ? "border-primary bg-accent" : "border-border bg-background"}`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="color">Farbe</Label>
-          <Input id="color" value={color} onChange={(e) => setColor(e.target.value)} placeholder="z. B. Beige" />
-        </div>
+            <div className="space-y-2">
+              <Label htmlFor="color">Farbe</Label>
+              <Input id="color" value={color} onChange={(e) => setColor(e.target.value)} placeholder="z. B. Beige" />
+            </div>
 
-        <Button onClick={onSave} disabled={saving} className="w-full">
-          {saving ? "Speichern…" : "Änderungen speichern"}
-        </Button>
+            <div className="grid grid-cols-2 gap-3">
+              <Button variant="outline" onClick={onCancel} disabled={saving}>
+                Abbrechen
+              </Button>
+              <Button onClick={onSave} disabled={saving}>
+                {saving ? "Speichern…" : "Speichern"}
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Name</p>
+              <p className="text-base font-medium">{name || <span className="text-muted-foreground italic">Unbenannt</span>}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Kategorie</p>
+              <p className="text-base font-medium">{categoryLabel(category)}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Farbe</p>
+              <p className="text-base font-medium">{color || <span className="text-muted-foreground italic">—</span>}</p>
+            </div>
+
+            <Button variant="outline" className="w-full" onClick={onEdit}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Bearbeiten
+            </Button>
+          </>
+        )}
 
         <Link
           to="/outfits/new"
