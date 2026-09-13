@@ -7,9 +7,26 @@ export type SuggestItem = {
   use_ai_image?: boolean | null;
 };
 
-function pick<T>(arr: T[]): T | undefined {
+/** Score pro Item-ID: +1 pro "gefällt mir", -1 pro "nicht mein Stil". */
+export type ItemScores = Record<string, number>;
+
+let activeScores: ItemScores = {};
+
+/** Gewichtete Zufallsauswahl: bessere Scores sind wahrscheinlicher, bleiben aber zufällig. */
+function pick<T extends { id?: string }>(arr: T[]): T | undefined {
   if (arr.length === 0) return undefined;
-  return arr[Math.floor(Math.random() * arr.length)];
+  const weights = arr.map((it) => {
+    const score = (it.id && activeScores[it.id]) || 0;
+    // milde Gewichtung, geklemmt damit Zufall erhalten bleibt
+    return Math.min(3, Math.max(0.3, 1 + 0.35 * score));
+  });
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < arr.length; i++) {
+    r -= weights[i]!;
+    if (r <= 0) return arr[i];
+  }
+  return arr[arr.length - 1];
 }
 
 /**
