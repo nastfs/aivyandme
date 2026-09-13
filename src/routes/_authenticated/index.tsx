@@ -10,6 +10,7 @@ import { de } from "date-fns/locale";
 import {
   Bell,
   Sun,
+  ArrowLeftRight,
   Cloud,
   CloudFog,
   CloudLightning,
@@ -84,6 +85,27 @@ function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.items, temp]);
 
+  /** Ersetzt genau ein Teil durch eine Alternative derselben Kategorie. */
+  function swapItem(index: number) {
+    setSuggestion((prev) => {
+      const item = prev[index];
+      if (!item) return prev;
+      const others = new Set(prev.filter((_, i) => i !== index).map((i) => i.id));
+      const alternatives = allItems.filter(
+        (i) => i.category === item.category && i.id !== item.id && !others.has(i.id),
+      );
+      if (!alternatives.length) return prev;
+      const alt = alternatives[Math.floor(Math.random() * alternatives.length)];
+      const next = [...prev];
+      next[index] = alt;
+      return next;
+    });
+  }
+
+  function hasAlternative(item: SuggestItem) {
+    return allItems.some((i) => i.category === item.category && i.id !== item.id);
+  }
+
   const plannedOutfit = (data?.plan as any)?.outfits;
 
   return (
@@ -127,21 +149,34 @@ function Home() {
         ) : suggestion.length ? (
           <div className="rounded-3xl bg-card p-4 shadow-sm">
             <div className="flex gap-3 overflow-x-auto pb-1">
-              {suggestion.map((it) => (
-                <Link key={it.id} to="/wardrobe/$id" params={{ id: it.id }} className="w-24 shrink-0">
-                  <div className="aspect-square overflow-hidden rounded-2xl bg-secondary">
-                    {data?.urls[displayPath(it)] && (
-                      <img
-                        src={data.urls[displayPath(it)]}
-                        alt={it.name ?? categoryLabel(it.category)}
-                        className="h-full w-full object-cover"
-                      />
-                    )}
+              {suggestion.map((it, idx) => (
+                <div key={it.id} className="w-24 shrink-0">
+                  <div className="relative">
+                    <Link to="/wardrobe/$id" params={{ id: it.id }}>
+                      <div className="aspect-square overflow-hidden rounded-2xl bg-secondary">
+                        {data?.urls[displayPath(it)] && (
+                          <img
+                            src={data.urls[displayPath(it)]}
+                            alt={it.name ?? categoryLabel(it.category)}
+                            className="h-full w-full object-cover"
+                          />
+                        )}
+                      </div>
+                    </Link>
+                    <button
+                      onClick={() => swapItem(idx)}
+                      disabled={!hasAlternative(it)}
+                      title="Keine Alternative im Schrank"
+                      aria-label="Teil tauschen"
+                      className="absolute right-1 top-1 rounded-full bg-background/90 p-1.5 text-muted-foreground shadow-sm transition hover:bg-secondary disabled:opacity-40"
+                    >
+                      <ArrowLeftRight className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    </button>
                   </div>
                   <p className="mt-1 truncate text-center text-xs">
                     {it.name || categoryLabel(it.category)}
                   </p>
-                </Link>
+                </div>
               ))}
             </div>
             <button
