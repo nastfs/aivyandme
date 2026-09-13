@@ -35,8 +35,14 @@ function pick<T extends { id?: string }>(arr: T[]): T | undefined {
  * "sport"-Teile werden nur mit anderen "sport"-Teilen kombiniert.
  * Temperatur (optional) beeinflusst nur die Gewichtung, ist kein Pflichtfaktor.
  */
-export function suggestOutfit(items: SuggestItem[], temp?: number | null): SuggestItem[] {
+export function suggestOutfit(
+  items: SuggestItem[],
+  temp?: number | null,
+  scores?: ItemScores,
+): SuggestItem[] {
+  activeScores = scores ?? {};
   if (!items.length) return [];
+
 
   const sport = items.filter((i) => i.category === "sport");
   const normal = items.filter((i) => i.category !== "sport");
