@@ -164,19 +164,19 @@ function AddItem() {
         correction: "",
         // Kein Gruppenfoto als Referenz — nur der Einzel-Crop dieses Teils
         sourceDataUrl: "",
-        cropDataUrl: crops[i] ?? url,
+        cropDataUrl: crop,
         confidence: typeof (it as any).confidence === "number" ? (it as any).confidence : 0.7,
         hint: "",
         hintBusy: false,
       }));
       setDrafts((prev) => (append ? [...prev, ...next] : next));
-      if (!items.length) {
+      if (!kept.length) {
         toast("Kein Kleidungsstück erkannt", {
           description: "Zoome mit „Wurde etwas nicht erkannt?“ näher an das Teil heran.",
         });
       } else {
-        toast.success(items.length > 1 ? `${items.length} Teile erkannt` : "Teil erkannt", {
-          description: items.map((i) => i.name).join(", "),
+        toast.success(kept.length > 1 ? `${kept.length} Teile erkannt` : "Teil erkannt", {
+          description: kept.map((k) => k.it.name).join(", "),
         });
       }
     } catch (e: any) {
