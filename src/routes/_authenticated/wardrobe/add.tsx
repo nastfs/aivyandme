@@ -60,12 +60,12 @@ type Draft = {
   hintBusy: boolean;
 };
 
-/** Schneidet eine normalisierte Bounding-Box aus einer Data-URL aus. */
+/** Schneidet eine normalisierte Bounding-Box aus einer Data-URL aus. Gibt null zurück, wenn keine gültige Box vorliegt. */
 async function cropBox(
   src: string,
   box: { x: number; y: number; w: number; h: number } | null | undefined,
-): Promise<string> {
-  if (!box) return src;
+): Promise<string | null> {
+  if (!box) return null;
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const i = new Image();
     i.onload = () => resolve(i);
