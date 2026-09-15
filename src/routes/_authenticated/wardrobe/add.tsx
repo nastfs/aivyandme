@@ -79,7 +79,7 @@ async function cropBox(
   const y1 = Math.min(Math.max(box.y + box.h, 0), 1) * img.height;
   const w = x1 - x0;
   const h = y1 - y0;
-  if (w < 8 || h < 8) return src;
+  if (w < 8 || h < 8) return null;
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(w);
   canvas.height = Math.round(h);
@@ -142,9 +142,13 @@ function AddItem() {
       }));
 
       const { items } = await detect({ data: { imageDataUrl: url, existing } });
-      const crops = await Promise.all(items.map((it) => cropBox(url, it.box).catch(() => url)));
+      const crops = await Promise.all(items.map((it) => cropBox(url, it.box).catch(() => null)));
+      // Teile ohne gültigen Zuschnitt verwerfen – niemals das ganze Originalfoto als Ersatz
+      const kept = items
+        .map((it, i) => ({ it, crop: crops[i] }))
+        .filter((e): e is { it: (typeof items)[number]; crop: string } => typeof e.crop === "string");
       const stamp = Date.now();
-      const next: Draft[] = items.map((it, i) => ({
+      const next: Draft[] = kept.map(({ it, crop }, i) => ({
         key: `${stamp}-${i}-${it.name}`,
         name: it.name,
         color: it.color,
