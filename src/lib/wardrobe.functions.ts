@@ -236,9 +236,12 @@ export const detectItems = createServerFn({ method: "POST" })
         /(schuh|sneaker|sandale|pantolette|badeschlappen|flipflop|flip-flop|stiefel|boots?|pumps|heels?|absatz|ballerina|loafer|slipper|hausschuh|mokassin|clog|espadrille|socke|strumpf|haarband|haarreif|scrunchie|haarspange)/i;
       const ACCESSORY_WORDS =
         /(tasche|rucksack|beutel|gürtel|schmuck|kette|armband|ring|ohrring|brille|mütze|cap|schal|tuch|uhr)/i;
+      const multiDetected = list.length > 1;
       const items: DetectedItem[] = list.slice(0, 40).map((p: any) => {
         const match = existing.find((e) => e.id === p?.matchId);
-        const b = normBox(p?.box);
+        let b = normBox(p?.box);
+        // Plausibilität: bei mehreren erkannten Teilen darf kein Teil fast das ganze Foto füllen
+        if (multiDetected && b && b.w * b.h > 0.6) b = null;
         return {
           category: ALLOWED.includes(p?.category) ? (p.category as Cat) : "sonstiges",
           name: typeof p?.name === "string" ? p.name.slice(0, 60) : "Neues Teil",
