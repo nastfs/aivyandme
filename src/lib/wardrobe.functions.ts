@@ -234,7 +234,7 @@ export const detectItems = createServerFn({ method: "POST" })
       };
       const SHOE_WORDS =
         /(schuh|sneaker|sandale|pantolette|badeschlappen|flipflop|flip-flop|stiefel|boots?|pumps|heels?|absatz|ballerina|loafer|slipper|hausschuh|mokassin|clog|espadrille|socke|strumpf|haarband|haarreif|scrunchie|haarspange)/i;
-      const items: DetectedItem[] = list.slice(0, 7).map((p: any) => {
+      const items: DetectedItem[] = list.slice(0, 40).map((p: any) => {
         const match = existing.find((e) => e.id === p?.matchId);
         const b = normBox(p?.box);
         return {
