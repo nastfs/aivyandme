@@ -147,6 +147,14 @@ function AddItem() {
       const kept = items
         .map((it, i) => ({ it, crop: crops[i] }))
         .filter((e): e is { it: (typeof items)[number]; crop: string } => typeof e.crop === "string");
+      const discarded = items.length - kept.length;
+      if (discarded > 0) {
+        toast(
+          discarded === 1
+            ? "1 Teil konnte nicht sauber zugeschnitten werden"
+            : `${discarded} Teile konnten nicht sauber zugeschnitten werden`,
+        );
+      }
       const stamp = Date.now();
       const next: Draft[] = kept.map(({ it, crop }, i) => ({
         key: `${stamp}-${i}-${it.name}`,
@@ -203,6 +211,16 @@ function AddItem() {
         if (!base) {
           toast.error(`Kein Einzel-Ausschnitt für „${d.name}"`);
           return { ...d, aiDataUrl: "", aiDataUrl2: "" };
+        }
+        // Zu kleiner oder zu schmaler Ausschnitt → KI würde Details erfinden: direkt den Zuschnitt verwenden
+        const dims = await imageDims(base).catch(() => null);
+        if (dims) {
+          const short = Math.min(dims.w, dims.h);
+          const ratio = dims.w / dims.h;
+          if (short < 60 || ratio < 0.25 || ratio > 4) {
+            patch(d.key, { aiDataUrl: "", aiDataUrl2: "" });
+            return { ...d, aiDataUrl: "", aiDataUrl2: "", keepOriginal: true };
+          }
         }
         patch(d.key, { smoothing: true });
         let aiDataUrl = "";
