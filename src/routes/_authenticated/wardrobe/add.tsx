@@ -88,6 +88,16 @@ async function cropBox(
   return canvas.toDataURL("image/jpeg", 0.92);
 }
 
+/** Pixel-Maße einer Data-URL ermitteln. */
+function imageDims(src: string): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve({ w: i.naturalWidth, h: i.naturalHeight });
+    i.onerror = reject;
+    i.src = src;
+  });
+}
+
 function AddItem() {
   const navigate = useNavigate();
   const detect = useServerFn(detectItems);
@@ -219,7 +229,8 @@ function AddItem() {
           const ratio = dims.w / dims.h;
           if (short < 60 || ratio < 0.25 || ratio > 4) {
             patch(d.key, { aiDataUrl: "", aiDataUrl2: "" });
-            return { ...d, aiDataUrl: "", aiDataUrl2: "", keepOriginal: true };
+            // Der Zuschnitt selbst wird als gespeichertes Bild verwendet
+            return { ...d, aiDataUrl: "", aiDataUrl2: "", keepOriginal: true, sourceDataUrl: base };
           }
         }
         patch(d.key, { smoothing: true });
