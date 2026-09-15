@@ -60,12 +60,12 @@ type Draft = {
   hintBusy: boolean;
 };
 
-/** Schneidet eine normalisierte Bounding-Box aus einer Data-URL aus. */
+/** Schneidet eine normalisierte Bounding-Box aus einer Data-URL aus. Gibt null zurück, wenn keine gültige Box vorliegt. */
 async function cropBox(
   src: string,
   box: { x: number; y: number; w: number; h: number } | null | undefined,
-): Promise<string> {
-  if (!box) return src;
+): Promise<string | null> {
+  if (!box) return null;
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const i = new Image();
     i.onload = () => resolve(i);
@@ -79,7 +79,7 @@ async function cropBox(
   const y1 = Math.min(Math.max(box.y + box.h, 0), 1) * img.height;
   const w = x1 - x0;
   const h = y1 - y0;
-  if (w < 8 || h < 8) return src;
+  if (w < 8 || h < 8) return null;
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(w);
   canvas.height = Math.round(h);
@@ -142,9 +142,13 @@ function AddItem() {
       }));
 
       const { items } = await detect({ data: { imageDataUrl: url, existing } });
-      const crops = await Promise.all(items.map((it) => cropBox(url, it.box).catch(() => url)));
+      const crops = await Promise.all(items.map((it) => cropBox(url, it.box).catch(() => null)));
+      // Teile ohne gültigen Zuschnitt verwerfen – niemals das ganze Originalfoto als Ersatz
+      const kept = items
+        .map((it, i) => ({ it, crop: crops[i] }))
+        .filter((e): e is { it: (typeof items)[number]; crop: string } => typeof e.crop === "string");
       const stamp = Date.now();
-      const next: Draft[] = items.map((it, i) => ({
+      const next: Draft[] = kept.map(({ it, crop }, i) => ({
         key: `${stamp}-${i}-${it.name}`,
         name: it.name,
         color: it.color,
@@ -160,19 +164,19 @@ function AddItem() {
         correction: "",
         // Kein Gruppenfoto als Referenz — nur der Einzel-Crop dieses Teils
         sourceDataUrl: "",
-        cropDataUrl: crops[i] ?? url,
+        cropDataUrl: crop,
         confidence: typeof (it as any).confidence === "number" ? (it as any).confidence : 0.7,
         hint: "",
         hintBusy: false,
       }));
       setDrafts((prev) => (append ? [...prev, ...next] : next));
-      if (!items.length) {
+      if (!kept.length) {
         toast("Kein Kleidungsstück erkannt", {
           description: "Zoome mit „Wurde etwas nicht erkannt?“ näher an das Teil heran.",
         });
       } else {
-        toast.success(items.length > 1 ? `${items.length} Teile erkannt` : "Teil erkannt", {
-          description: items.map((i) => i.name).join(", "),
+        toast.success(kept.length > 1 ? `${kept.length} Teile erkannt` : "Teil erkannt", {
+          description: kept.map((k) => k.it.name).join(", "),
         });
       }
     } catch (e: any) {
@@ -405,7 +409,7 @@ function AddItem() {
       <p className="mb-6 text-center text-sm text-muted-foreground">
         Fotografiere einzelne Teile, mehrere auf einmal — oder lade ein Foto von dir im Outfit hoch.
         Die KI erkennt ausschließlich reine Bekleidung — Oberteile, Pullover, Jacken, Hosen, Röcke
-        und Kleider (max. 7 Teile) — und schneidet sie aus deinem Foto zu. Schuhe, Socken und
+        und Kleider — und schneidet sie aus deinem Foto zu. Schuhe, Socken und
         Accessoires werden bewusst nicht erkannt. Die KI-Bilder werden erst nach deiner Bestätigung
         erstellt.
       </p>

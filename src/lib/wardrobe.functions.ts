@@ -182,7 +182,7 @@ export const detectItems = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "Du bist ein Fashion-Assistent. Erkenne auf dem Foto AUSSCHLIESSLICH reine Bekleidung: Oberteile (Shirt, Pulli, Jacke, Blazer), Unterteile (Hose, Rock, Shorts) und Kleider. STRIKT AUSGESCHLOSSEN und niemals melden: jegliches Schuhwerk (Sneaker, Sandalen, Badeschlappen, Stiefel, Absatzschuhe, Hausschuhe), Socken, Haarbänder und Haaraccessoires, Schmuck, Uhren, Sonnenbrillen, Mützen/Hüte, Schals, Gürtel, Taschen, Handy, Möbel, Hintergrund, Person, Haut, Haare. Wenn du unsicher bist, ob ein Objekt reine Bekleidung ist: lieber weglassen. Maximal 7 Teile. Halte die Antwort extrem knapp. Antworte AUSSCHLIESSLICH mit JSON: {\"items\":[{\"category\":\"oberteile|hosen|kleider|blazer|roecke|sport|sonstiges\",\"name\":\"kurzer deutscher Name (max 3 Wörter)\",\"color\":\"präzise Farbe deutsch, z.B. 'Cremeweiß', 'Dunkelblau', 'Camel'\",\"description\":\"max 5 Wörter Position, z.B. 'Pulli oben'\",\"box\":{\"x\":0.0,\"y\":0.0,\"w\":0.0,\"h\":0.0},\"confidence\":0.0,\"matchId\":null}]}. box ist die normalisierte Bounding-Box (0–1, x/y = linke obere Ecke) des Teils im Bild, möglichst eng um das Teil. confidence ist eine ehrliche Selbsteinschätzung zwischen 0 und 1, wie sicher du dir bei Art/Kategorie/Schnitt dieses Teils bist: >0.8 nur bei eindeutig sichtbaren, klar abgegrenzten Teilen. Vergib bewusst NIEDRIGE Werte (<0.65) statt zu raten bei: um Hals oder Taille gebundenen/geknoteten Teilen, stark überlappenden oder geschichteten Kleidungsstücken, nur teilweise sichtbaren oder am Bildrand abgeschnittenen Teilen sowie wenn Kategorie oder Schnitt nicht eindeutig sind (z. B. Cardigan vs. Rollkragenpullover). Wenn ein unteres Teil (Hose, Rock, Kleid) von einem längeren, offen getragenen Oberteil/Jacke/Hemd teilweise verdeckt ist: die Bounding-Box darf NUR den tatsächlich sichtbaren Bereich dieses unteren Teils umfassen, niemals den verdeckten Teil ergänzen oder die Box größer ziehen als sichtbar. Setze in solchen Fällen die confidence bewusst niedrig (<0.65), damit die Nutzerin korrigieren kann. Melde jedes Teil trotzdem — auch mit niedriger confidence. Kein Fließtext, kein Markdown." +
+              "Du bist ein Fashion-Assistent. Erkenne auf dem Foto AUSSCHLIESSLICH reine Bekleidung: Oberteile (Shirt, Pulli, Jacke, Blazer), Unterteile (Hose, Rock, Shorts) und Kleider. STRIKT AUSGESCHLOSSEN und niemals melden: jegliches Schuhwerk (Sneaker, Sandalen, Badeschlappen, Stiefel, Absatzschuhe, Hausschuhe), Socken, Haarbänder und Haaraccessoires, Schmuck, Uhren, Sonnenbrillen, Mützen/Hüte, Schals, Gürtel, Taschen, Handy, Möbel, Hintergrund, Person, Haut, Haare. Wenn du unsicher bist, ob ein Objekt reine Bekleidung ist: lieber weglassen. Melde ALLE einzeln erkannten Teile, auch wenn es viele sind (z. B. bei einer vollen Kleiderstange) – wähle keine Teilmenge aus. Halte die Antwort extrem knapp. Antworte AUSSCHLIESSLICH mit JSON: {\"items\":[{\"category\":\"oberteile|hosen|kleider|blazer|roecke|sport|sonstiges\",\"name\":\"kurzer deutscher Name (max 3 Wörter)\",\"color\":\"präzise Farbe deutsch, z.B. 'Cremeweiß', 'Dunkelblau', 'Camel'\",\"description\":\"max 5 Wörter Position, z.B. 'Pulli oben'\",\"box\":{\"x\":0.0,\"y\":0.0,\"w\":0.0,\"h\":0.0},\"confidence\":0.0,\"matchId\":null}]}. box ist die normalisierte Bounding-Box (0–1, x/y = linke obere Ecke) des Teils im Bild, möglichst eng um das Teil. confidence ist eine ehrliche Selbsteinschätzung zwischen 0 und 1, wie sicher du dir bei Art/Kategorie/Schnitt dieses Teils bist: >0.8 nur bei eindeutig sichtbaren, klar abgegrenzten Teilen. Vergib bewusst NIEDRIGE Werte (<0.65) statt zu raten bei: um Hals oder Taille gebundenen/geknoteten Teilen, stark überlappenden oder geschichteten Kleidungsstücken, nur teilweise sichtbaren oder am Bildrand abgeschnittenen Teilen, Teilen, von denen im Foto nur ein schmaler, wenig aussagekräftiger Ausschnitt sichtbar ist (z. B. eng an eng hängende Kleidungsstücke auf einer Kleiderstange), sowie wenn Kategorie oder Schnitt nicht eindeutig sind (z. B. Cardigan vs. Rollkragenpullover). Wenn ein unteres Teil (Hose, Rock, Kleid) von einem längeren, offen getragenen Oberteil/Jacke/Hemd teilweise verdeckt ist: die Bounding-Box darf NUR den tatsächlich sichtbaren Bereich dieses unteren Teils umfassen, niemals den verdeckten Teil ergänzen oder die Box größer ziehen als sichtbar. Setze in solchen Fällen die confidence bewusst niedrig (<0.65), damit die Nutzerin korrigieren kann. Melde jedes Teil trotzdem — auch mit niedriger confidence. Kein Fließtext, kein Markdown." +
               existingBlock,
           },
           {
@@ -234,7 +234,9 @@ export const detectItems = createServerFn({ method: "POST" })
       };
       const SHOE_WORDS =
         /(schuh|sneaker|sandale|pantolette|badeschlappen|flipflop|flip-flop|stiefel|boots?|pumps|heels?|absatz|ballerina|loafer|slipper|hausschuh|mokassin|clog|espadrille|socke|strumpf|haarband|haarreif|scrunchie|haarspange)/i;
-      const items: DetectedItem[] = list.slice(0, 7).map((p: any) => {
+      const ACCESSORY_WORDS =
+        /(tasche|rucksack|beutel|gürtel|schmuck|kette|armband|ring|ohrring|brille|mütze|cap|schal|tuch|uhr)/i;
+      const items: DetectedItem[] = list.slice(0, 40).map((p: any) => {
         const match = existing.find((e) => e.id === p?.matchId);
         const b = normBox(p?.box);
         return {
@@ -248,7 +250,10 @@ export const detectItems = createServerFn({ method: "POST" })
           confidence: Math.min(1, Math.max(0, num(p?.confidence, 0.7))),
         };
       }).filter(
-        (it: DetectedItem) => it.category !== ("schuhe" as Cat) && !SHOE_WORDS.test(it.name),
+        (it: DetectedItem) =>
+          it.category !== ("schuhe" as Cat) &&
+          !SHOE_WORDS.test(it.name) &&
+          !ACCESSORY_WORDS.test(it.name),
       );
       return { items };
     } catch {
