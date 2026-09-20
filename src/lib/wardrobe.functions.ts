@@ -160,48 +160,91 @@ export const detectItems = createServerFn({ method: "POST" })
     return data;
   })
   .handler(async ({ data }): Promise<{ items: DetectedItem[] }> => {
-    const fallback = {
-      items: [
-        { category: "sonstiges" as Cat, name: "Neues Teil", color: "", description: "das Kleidungsstück", confidence: 0.5 },
-      ],
-    };
     const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) return fallback;
+    if (!apiKey) throw new Error("KI ist aktuell nicht verfügbar (kein API-Key konfiguriert)");
 
     const existing = (data.existing ?? []).slice(0, 120);
     const existingBlock = existing.length
       ? `\n\nBereits im Schrank vorhandene Teile (JSON): ${JSON.stringify(existing)}. Wenn ein erkanntes Teil sehr wahrscheinlich eines dieser vorhandenen Teile IST (gleiche Art, Farbe, Muster), setze "matchId" auf dessen id. Sonst setze "matchId" auf null. Sei eher zurückhaltend: nur bei klarer Ähnlichkeit einen Match setzen.`
       : "";
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content:
-              "Du bist ein Fashion-Assistent. Erkenne auf dem Foto AUSSCHLIESSLICH reine Bekleidung: Oberteile (Shirt, Pulli, Jacke, Blazer), Unterteile (Hose, Rock, Shorts) und Kleider. STRIKT AUSGESCHLOSSEN und niemals melden: jegliches Schuhwerk (Sneaker, Sandalen, Badeschlappen, Stiefel, Absatzschuhe, Hausschuhe), Socken, Haarbänder und Haaraccessoires, Schmuck, Uhren, Sonnenbrillen, Mützen/Hüte, Schals, Gürtel, Taschen, Handy, Möbel, Hintergrund, Person, Haut, Haare. Wenn du unsicher bist, ob ein Objekt reine Bekleidung ist: lieber weglassen. Melde ALLE einzeln erkannten Teile, auch wenn es viele sind (z. B. bei einer vollen Kleiderstange) – wähle keine Teilmenge aus. Halte die Antwort extrem knapp. Antworte AUSSCHLIESSLICH mit JSON: {\"items\":[{\"category\":\"oberteile|hosen|kleider|blazer|roecke|sport|sonstiges\",\"name\":\"kurzer deutscher Name (max 3 Wörter)\",\"color\":\"präzise Farbe deutsch, z.B. 'Cremeweiß', 'Dunkelblau', 'Camel'\",\"description\":\"max 5 Wörter Position, z.B. 'Pulli oben'\",\"box\":{\"x\":0.0,\"y\":0.0,\"w\":0.0,\"h\":0.0},\"confidence\":0.0,\"matchId\":null}]}. box ist die normalisierte Bounding-Box (0–1, x/y = linke obere Ecke) des Teils im Bild, möglichst eng um das Teil. confidence ist eine ehrliche Selbsteinschätzung zwischen 0 und 1, wie sicher du dir bei Art/Kategorie/Schnitt dieses Teils bist: >0.8 nur bei eindeutig sichtbaren, klar abgegrenzten Teilen. Vergib bewusst NIEDRIGE Werte (<0.65) statt zu raten bei: um Hals oder Taille gebundenen/geknoteten Teilen, stark überlappenden oder geschichteten Kleidungsstücken, nur teilweise sichtbaren oder am Bildrand abgeschnittenen Teilen, Teilen, von denen im Foto nur ein schmaler, wenig aussagekräftiger Ausschnitt sichtbar ist (z. B. eng an eng hängende Kleidungsstücke auf einer Kleiderstange), sowie wenn Kategorie oder Schnitt nicht eindeutig sind (z. B. Cardigan vs. Rollkragenpullover). Wenn ein unteres Teil (Hose, Rock, Kleid) von einem längeren, offen getragenen Oberteil/Jacke/Hemd teilweise verdeckt ist: die Bounding-Box darf NUR den tatsächlich sichtbaren Bereich dieses unteren Teils umfassen, niemals den verdeckten Teil ergänzen oder die Box größer ziehen als sichtbar. Setze in solchen Fällen die confidence bewusst niedrig (<0.65), damit die Nutzerin korrigieren kann. Melde jedes Teil trotzdem — auch mit niedriger confidence. Kein Fließtext, kein Markdown." +
-              existingBlock,
-          },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Welche Kleidungsstücke sind auf diesem Foto? Nur reine Bekleidung — keine Schuhe, Socken, Haaraccessoires oder sonstigen Accessoires." },
-              { type: "image_url", image_url: { url: data.imageDataUrl } },
-            ],
-          },
-        ],
-      }),
-    });
-    if (!res.ok) return fallback;
+    const basePrompt =
+      "Du bist ein Fashion-Assistent. Erkenne auf dem Foto Bekleidung UND Schuhe: Oberteile (Shirt, Pulli, Jacke, Blazer), Unterteile (Hose, Rock, Shorts), Kleider sowie jegliches Schuhwerk (Sneaker, Sandalen, Stiefel, Absatzschuhe, Ballerinas, Loafer, Hausschuhe usw.). WICHTIGSTE REGEL bei Fotos, auf denen eine Person ein Outfit trägt: Zerlege das Outfit IMMER in seine einzelnen Kleidungsstücke und melde JEDES Teil (jedes Oberteil, jedes Unterteil, jede Jacke/jeder Blazer, das Schuhpaar usw.) als EIGENEN Eintrag mit einer eigenen, eng um genau dieses eine Teil gezogenen Box. Melde NIEMALS das ganze getragene Outfit oder mehrere Kleidungsstücke zusammen als EIN Teil mit einer Box über die gesamte Person — auch wenn nur eine Person mit einem einzigen Outfit zu sehen ist (z. B. T-Shirt + Hose → zwei getrennte Einträge: einer nur um den Oberkörper/das Shirt, einer nur um die Beine/die Hose). Diese Aufteilung gilt genauso für Kleiderstangen, Schuhregale oder Gruppenfotos mehrerer Teile. Beispiel: Eine Person trägt Hose, T-Shirt, eine dünne offene Jacke und Schuhe, dazu Ohrringe → das sind GENAU 4 Einträge (Hose, T-Shirt, Jacke, Schuhpaar), die Ohrringe werden NICHT gemeldet. Zähle daher zuerst für dich selbst, wie viele einzelne Kleidungsstücke und Schuhe insgesamt sichtbar sind, und gib danach genau so viele Einträge zurück. Melde ein Schuhpaar als EIN Teil mit einer Box, die beide Schuhe umfasst — nicht als zwei einzelne Teile. STRIKT AUSGESCHLOSSEN und niemals melden: Socken/Strümpfe, Haarbänder und Haaraccessoires, Schmuck, Uhren, Sonnenbrillen, Mützen/Hüte, Schals, Gürtel, Taschen, Handy, Möbel, Hintergrund, Person, Haut, Haare. Wenn du unsicher bist, ob ein Objekt Bekleidung oder Schuhwerk ist: lieber weglassen. Melde ALLE einzeln erkannten Teile, auch wenn es viele sind (z. B. bei einer vollen Kleiderstange oder einem Schuhregal) – wähle keine Teilmenge aus. Halte die Antwort extrem knapp. Antworte AUSSCHLIESSLICH mit JSON: {\"items\":[{\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|sport|sonstiges\",\"name\":\"kurzer deutscher Name (max 3 Wörter)\",\"color\":\"präzise Farbe deutsch, z.B. 'Cremeweiß', 'Dunkelblau', 'Camel'\",\"description\":\"max 5 Wörter Position, z.B. 'Pulli oben'\",\"box\":{\"x\":0.0,\"y\":0.0,\"w\":0.0,\"h\":0.0},\"confidence\":0.0,\"matchId\":null}]}. box ist die normalisierte Bounding-Box (0–1, x/y = linke obere Ecke) des Teils im Bild, möglichst eng um das Teil (bei Schuhen: eng um das ganze Paar). confidence ist eine ehrliche Selbsteinschätzung zwischen 0 und 1, wie sicher du dir bei Art/Kategorie/Schnitt dieses Teils bist: >0.8 nur bei eindeutig sichtbaren, klar abgegrenzten Teilen. Vergib bewusst NIEDRIGE Werte (<0.65) statt zu raten bei: um Hals oder Taille gebundenen/geknoteten Teilen, stark überlappenden oder geschichteten Kleidungsstücken, nur teilweise sichtbaren oder am Bildrand abgeschnittenen Teilen, Teilen, von denen im Foto nur ein schmaler, wenig aussagekräftiger Ausschnitt sichtbar ist (z. B. eng an eng hängende Kleidungsstücke auf einer Kleiderstange), sowie wenn Kategorie oder Schnitt nicht eindeutig sind (z. B. Cardigan vs. Rollkragenpullover). Wenn ein unteres Teil (Hose, Rock, Kleid) von einem längeren, offen getragenen Oberteil/Jacke/Hemd teilweise verdeckt ist: die Bounding-Box darf NUR den tatsächlich sichtbaren Bereich dieses unteren Teils umfassen, niemals den verdeckten Teil ergänzen oder die Box größer ziehen als sichtbar. Setze in solchen Fällen die confidence bewusst niedrig (<0.65), damit die Nutzerin korrigieren kann. Melde jedes Teil trotzdem — auch mit niedriger confidence. Kein Fließtext, kein Markdown." +
+      existingBlock;
 
-    const json = await res.json();
-    const raw: string = json?.choices?.[0]?.message?.content ?? "";
+    /** Ein Erkennungs-Aufruf: liefert die rohe items-Liste, oder einen Fehlergrund bei HTTP-/Parse-Fehler. */
+    async function askGemini(
+      systemPrompt: string,
+      userText: string,
+    ): Promise<{ list: any[] } | { error: string }> {
+      let res: Response;
+      try {
+        res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash",
+            messages: [
+              { role: "system", content: systemPrompt },
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: userText },
+                  { type: "image_url", image_url: { url: data.imageDataUrl } },
+                ],
+              },
+            ],
+          }),
+        });
+      } catch (e: any) {
+        return { error: `Netzwerkfehler beim Aufruf der KI: ${e?.message ?? "unbekannt"}` };
+      }
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        return { error: `KI-Gateway antwortete mit ${res.status}${body ? `: ${body.slice(0, 300)}` : ""}` };
+      }
+      const json = await res.json();
+      const raw: string = json?.choices?.[0]?.message?.content ?? "";
+      // Modell hält sich nicht immer strikt an "nur JSON" — ggf. umgebenden Fließtext abschneiden.
+      let cleaned = raw.replace(/```json|```/g, "").trim();
+      const first = cleaned.indexOf("{");
+      const last = cleaned.lastIndexOf("}");
+      if (first !== -1 && last > first) cleaned = cleaned.slice(first, last + 1);
+      try {
+        const parsed = JSON.parse(cleaned);
+        return { list: Array.isArray(parsed?.items) ? parsed.items : [] };
+      } catch {
+        return { error: `KI-Antwort war kein gültiges JSON: ${raw.slice(0, 300)}` };
+      }
+    }
+
+    const firstCall = await askGemini(
+      basePrompt,
+      "Welche Kleidungsstücke und Schuhe sind auf diesem Foto? Wenn eine Person zu sehen ist, die ein Outfit trägt: melde jedes getragene Teil einzeln (nicht das Outfit als Ganzes). Keine Socken, Haaraccessoires oder sonstigen Accessoires.",
+    );
+    if ("error" in firstCall) {
+      console.error("[detectItems] Erkennung fehlgeschlagen:", firstCall.error);
+      throw new Error(`Automatische Erkennung fehlgeschlagen: ${firstCall.error}`);
+    }
+    let list = firstCall.list;
+
+    // Sicherheitsnetz: nur EIN gemeldetes Teil ist bei einem Personenfoto verdächtig (oft das ganze
+    // Outfit fälschlich als ein Teil zusammengefasst). Zweite, gezielte Rückfrage zur Gegenprüfung.
+    // Schlägt diese zweite Anfrage fehl, wird das erste (gültige) Ergebnis einfach weiterverwendet.
+    if (list.length === 1) {
+      const verifyCall = await askGemini(
+        "WIEDERHOLUNGS-PRÜFUNG: Deine vorherige Analyse dieses exakt gleichen Fotos hat nur EIN Kleidungsstück gemeldet. Bevor du erneut antwortest: prüfe besonders sorgfältig, ob in Wirklichkeit MEHRERE separate Kleidungsstücke zu sehen sind (z. B. eine Person, die gleichzeitig ein Oberteil UND eine Hose/einen Rock/Shorts trägt, oder ein Kleid UND eine offene Jacke/einen Cardigan darüber, oder Kleidung UND separat sichtbare Schuhe). Wenn ja: melde jedes dieser Teile als eigenen Eintrag mit eigener eng anliegender Box. Nur wenn auf dem Foto wirklich nachweislich nur ein einzelnes Kleidungsstück ohne weitere Teile zu sehen ist (z. B. ein Flat-Lay-Foto oder eine Nahaufnahme eines einzelnen Teils ohne Person), melde weiterhin genau dieses eine Teil. " +
+          basePrompt,
+        "Zähle die auf diesem Foto sichtbaren Kleidungsstücke und Schuhe neu und gib jedes einzeln zurück, falls es mehr als eines gibt.",
+      );
+      if ("list" in verifyCall && verifyCall.list.length > 1) {
+        list = verifyCall.list;
+      } else if ("error" in verifyCall) {
+        console.error("[detectItems] Gegenprüfung fehlgeschlagen:", verifyCall.error);
+      }
+    }
+
     try {
-      const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
-      const list = Array.isArray(parsed?.items) ? parsed.items : [];
       const num = (v: any, d: number) => (typeof v === "number" && isFinite(v) ? v : d);
       /** Nimmt die Modell-Koordinaten unverändert an, normalisiert nur Format/Skala. */
       const normBox = (b: any) => {
@@ -232,8 +275,8 @@ export const detectItems = createServerFn({ method: "POST" })
         h = Math.min(1 - y, Math.max(0.02, h));
         return { x, y, w, h };
       };
-      const SHOE_WORDS =
-        /(schuh|sneaker|sandale|pantolette|badeschlappen|flipflop|flip-flop|stiefel|boots?|pumps|heels?|absatz|ballerina|loafer|slipper|hausschuh|mokassin|clog|espadrille|socke|strumpf|haarband|haarreif|scrunchie|haarspange)/i;
+      const NON_CLOTHING_WORDS =
+        /(socke|strumpf|haarband|haarreif|scrunchie|haarspange)/i;
       const ACCESSORY_WORDS =
         /(tasche|rucksack|beutel|gürtel|schmuck|kette|armband|ring|ohrring|brille|mütze|cap|schal|tuch|uhr)/i;
       const multiDetected = list.length > 1;
@@ -254,13 +297,13 @@ export const detectItems = createServerFn({ method: "POST" })
         };
       }).filter(
         (it: DetectedItem) =>
-          it.category !== ("schuhe" as Cat) &&
-          !SHOE_WORDS.test(it.name) &&
+          !NON_CLOTHING_WORDS.test(it.name) &&
           !ACCESSORY_WORDS.test(it.name),
       );
       return { items };
-    } catch {
-      return fallback;
+    } catch (e: any) {
+      console.error("[detectItems] Verarbeitung der KI-Antwort fehlgeschlagen:", e);
+      throw new Error("Antwort der KI konnte nicht verarbeitet werden");
     }
   });
 

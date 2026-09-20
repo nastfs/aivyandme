@@ -437,9 +437,9 @@ function AddItem() {
 
       <p className="mb-6 text-center text-sm text-muted-foreground">
         Fotografiere einzelne Teile, mehrere auf einmal — oder lade ein Foto von dir im Outfit hoch.
-        Die KI erkennt ausschließlich reine Bekleidung — Oberteile, Pullover, Jacken, Hosen, Röcke
-        und Kleider — und schneidet sie aus deinem Foto zu. Schuhe, Socken und
-        Accessoires werden bewusst nicht erkannt. Die KI-Bilder werden erst nach deiner Bestätigung
+        Die KI erkennt Bekleidung — Oberteile, Pullover, Jacken, Hosen, Röcke und Kleider — sowie
+        Schuhe und schneidet sie aus deinem Foto zu. Socken und Accessoires wie Schmuck oder
+        Taschen werden bewusst nicht erkannt. Die KI-Bilder werden erst nach deiner Bestätigung
         erstellt.
       </p>
 
