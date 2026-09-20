@@ -15,8 +15,8 @@ export const smoothItemImage = createServerFn({ method: "POST" })
     return data;
   })
   .handler(async ({ data }) => {
-    const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) throw new Error("KI ist gerade nicht verfügbar");
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey) throw new Error("KI ist gerade nicht verfügbar (kein API-Key konfiguriert)");
 
     const personRule =
       " Falls eine Person das Teil trägt: extrahiere nur das Kleidungsstück selbst und entferne Person, Haut, Haare und Körperteile vollständig; ergänze verdeckte Bereiche plausibel, ohne Schnitt, Farbe oder Muster zu verändern.";
@@ -42,38 +42,32 @@ export const smoothItemImage = createServerFn({ method: "POST" })
 
     const mime = data.imageDataUrl.slice(5, data.imageDataUrl.indexOf(";")) || "image/jpeg";
     const rawB64 = data.imageDataUrl.slice(data.imageDataUrl.indexOf(",") + 1);
-    void mime;
-    void rawB64;
 
-    // Standard-Modell (Nano Banana 2) – Chat-Shape mit messages + modalities
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: promptText }, { inline_data: { mime_type: mime, data: rawB64 } }],
+            },
+          ],
+          generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+        }),
       },
-      body: JSON.stringify({
-        model: "google/gemini-3.1-flash-image",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: promptText },
-              { type: "image_url", image_url: { url: data.imageDataUrl } },
-            ],
-          },
-        ],
-        modalities: ["image", "text"],
-      }),
-    });
-
+    );
     if (!res.ok) {
-      throw new Error(`Bildbearbeitung fehlgeschlagen (${res.status})`);
+      const body = await res.text().catch(() => "");
+      throw new Error(`Bildbearbeitung fehlgeschlagen (${res.status})${body ? `: ${body.slice(0, 300)}` : ""}`);
     }
     const json = await res.json();
-    const b64 = json?.data?.[0]?.b64_json;
-    if (!b64) throw new Error("Kein Bild erhalten");
-    return { b64 };
+    const parts = json?.candidates?.[0]?.content?.parts ?? [];
+    const imgPart = parts.find((p: any) => p.inlineData);
+    if (!imgPart) throw new Error("Kein Bild erhalten");
+    return { b64: imgPart.inlineData.data as string };
   });
 
 export const classifyItem = createServerFn({ method: "POST" })
@@ -160,7 +154,7 @@ export const detectItems = createServerFn({ method: "POST" })
     return data;
   })
   .handler(async ({ data }): Promise<{ items: DetectedItem[] }> => {
-    const apiKey = process.env.LOVABLE_API_KEY;
+    const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) throw new Error("KI ist aktuell nicht verfügbar (kein API-Key konfiguriert)");
 
     const existing = (data.existing ?? []).slice(0, 120);
@@ -172,39 +166,7 @@ export const detectItems = createServerFn({ method: "POST" })
       "Du bist ein Fashion-Assistent. Erkenne auf dem Foto Bekleidung UND Schuhe: Oberteile (Shirt, Pulli, Jacke, Blazer), Unterteile (Hose, Rock, Shorts), Kleider sowie jegliches Schuhwerk (Sneaker, Sandalen, Stiefel, Absatzschuhe, Ballerinas, Loafer, Hausschuhe usw.). WICHTIGSTE REGEL bei Fotos, auf denen eine Person ein Outfit trägt: Zerlege das Outfit IMMER in seine einzelnen Kleidungsstücke und melde JEDES Teil (jedes Oberteil, jedes Unterteil, jede Jacke/jeder Blazer, das Schuhpaar usw.) als EIGENEN Eintrag mit einer eigenen, eng um genau dieses eine Teil gezogenen Box. Melde NIEMALS das ganze getragene Outfit oder mehrere Kleidungsstücke zusammen als EIN Teil mit einer Box über die gesamte Person — auch wenn nur eine Person mit einem einzigen Outfit zu sehen ist (z. B. T-Shirt + Hose → zwei getrennte Einträge: einer nur um den Oberkörper/das Shirt, einer nur um die Beine/die Hose). Diese Aufteilung gilt genauso für Kleiderstangen, Schuhregale oder Gruppenfotos mehrerer Teile. Beispiel: Eine Person trägt Hose, T-Shirt, eine dünne offene Jacke und Schuhe, dazu Ohrringe → das sind GENAU 4 Einträge (Hose, T-Shirt, Jacke, Schuhpaar), die Ohrringe werden NICHT gemeldet. Zähle daher zuerst für dich selbst, wie viele einzelne Kleidungsstücke und Schuhe insgesamt sichtbar sind, und gib danach genau so viele Einträge zurück. Melde ein Schuhpaar als EIN Teil mit einer Box, die beide Schuhe umfasst — nicht als zwei einzelne Teile. STRIKT AUSGESCHLOSSEN und niemals melden: Socken/Strümpfe, Haarbänder und Haaraccessoires, Schmuck, Uhren, Sonnenbrillen, Mützen/Hüte, Schals, Gürtel, Taschen, Handy, Möbel, Hintergrund, Person, Haut, Haare. Wenn du unsicher bist, ob ein Objekt Bekleidung oder Schuhwerk ist: lieber weglassen. Melde ALLE einzeln erkannten Teile, auch wenn es viele sind (z. B. bei einer vollen Kleiderstange oder einem Schuhregal) – wähle keine Teilmenge aus. Halte die Antwort extrem knapp. Antworte AUSSCHLIESSLICH mit JSON: {\"items\":[{\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|sport|sonstiges\",\"name\":\"kurzer deutscher Name (max 3 Wörter)\",\"color\":\"präzise Farbe deutsch, z.B. 'Cremeweiß', 'Dunkelblau', 'Camel'\",\"description\":\"max 5 Wörter Position, z.B. 'Pulli oben'\",\"box\":{\"x\":0.0,\"y\":0.0,\"w\":0.0,\"h\":0.0},\"confidence\":0.0,\"matchId\":null}]}. box ist die normalisierte Bounding-Box (0–1, x/y = linke obere Ecke) des Teils im Bild, möglichst eng um das Teil (bei Schuhen: eng um das ganze Paar). confidence ist eine ehrliche Selbsteinschätzung zwischen 0 und 1, wie sicher du dir bei Art/Kategorie/Schnitt dieses Teils bist: >0.8 nur bei eindeutig sichtbaren, klar abgegrenzten Teilen. Vergib bewusst NIEDRIGE Werte (<0.65) statt zu raten bei: um Hals oder Taille gebundenen/geknoteten Teilen, stark überlappenden oder geschichteten Kleidungsstücken, nur teilweise sichtbaren oder am Bildrand abgeschnittenen Teilen, Teilen, von denen im Foto nur ein schmaler, wenig aussagekräftiger Ausschnitt sichtbar ist (z. B. eng an eng hängende Kleidungsstücke auf einer Kleiderstange), sowie wenn Kategorie oder Schnitt nicht eindeutig sind (z. B. Cardigan vs. Rollkragenpullover). Wenn ein unteres Teil (Hose, Rock, Kleid) von einem längeren, offen getragenen Oberteil/Jacke/Hemd teilweise verdeckt ist: die Bounding-Box darf NUR den tatsächlich sichtbaren Bereich dieses unteren Teils umfassen, niemals den verdeckten Teil ergänzen oder die Box größer ziehen als sichtbar. Setze in solchen Fällen die confidence bewusst niedrig (<0.65), damit die Nutzerin korrigieren kann. Melde jedes Teil trotzdem — auch mit niedriger confidence. Kein Fließtext, kein Markdown." +
       existingBlock;
 
-    /** Ein Erkennungs-Aufruf: liefert die rohe items-Liste, oder einen Fehlergrund bei HTTP-/Parse-Fehler. */
-    async function askGemini(
-      systemPrompt: string,
-      userText: string,
-    ): Promise<{ list: any[] } | { error: string }> {
-      let res: Response;
-      try {
-        res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: [
-              { role: "system", content: systemPrompt },
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: userText },
-                  { type: "image_url", image_url: { url: data.imageDataUrl } },
-                ],
-              },
-            ],
-          }),
-        });
-      } catch (e: any) {
-        return { error: `Netzwerkfehler beim Aufruf der KI: ${e?.message ?? "unbekannt"}` };
-      }
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        return { error: `KI-Gateway antwortete mit ${res.status}${body ? `: ${body.slice(0, 300)}` : ""}` };
-      }
-      const json = await res.json();
-      const raw: string = json?.choices?.[0]?.message?.content ?? "";
+    function extractJsonItems(raw: string): { list: any[] } | { error: string } {
       // Modell hält sich nicht immer strikt an "nur JSON" — ggf. umgebenden Fließtext abschneiden.
       let cleaned = raw.replace(/```json|```/g, "").trim();
       const first = cleaned.indexOf("{");
@@ -216,6 +178,45 @@ export const detectItems = createServerFn({ method: "POST" })
       } catch {
         return { error: `KI-Antwort war kein gültiges JSON: ${raw.slice(0, 300)}` };
       }
+    }
+
+    /** Ein Erkennungs-Aufruf: liefert die rohe items-Liste, oder einen Fehlergrund bei HTTP-/Parse-Fehler. */
+    async function askGemini(
+      systemPrompt: string,
+      userText: string,
+    ): Promise<{ list: any[] } | { error: string }> {
+      const mime = data.imageDataUrl.slice(5, data.imageDataUrl.indexOf(";")) || "image/jpeg";
+      const b64 = data.imageDataUrl.slice(data.imageDataUrl.indexOf(",") + 1);
+      let res: Response;
+      try {
+        res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents: [
+                {
+                  role: "user",
+                  parts: [{ text: userText }, { inline_data: { mime_type: mime, data: b64 } }],
+                },
+              ],
+            }),
+          },
+        );
+      } catch (e: any) {
+        return { error: `Netzwerkfehler beim Aufruf von Gemini: ${e?.message ?? "unbekannt"}` };
+      }
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        return { error: `Gemini antwortete mit ${res.status}${body ? `: ${body.slice(0, 300)}` : ""}` };
+      }
+      const json = await res.json();
+      const raw: string = (json?.candidates?.[0]?.content?.parts ?? [])
+        .map((p: any) => p.text ?? "")
+        .join("");
+      return extractJsonItems(raw);
     }
 
     const firstCall = await askGemini(
