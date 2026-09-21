@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      daily_context: {
+        Row: {
+          context_date: string
+          created_at: string
+          id: string
+          occasion: string
+          user_id: string
+        }
+        Insert: {
+          context_date: string
+          created_at?: string
+          id?: string
+          occasion: string
+          user_id: string
+        }
+        Update: {
+          context_date?: string
+          created_at?: string
+          id?: string
+          occasion?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       outfit_feedback: {
         Row: {
           created_at: string
