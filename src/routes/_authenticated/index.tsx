@@ -5,11 +5,16 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { signedUrlsMap, displayPath } from "@/lib/storage";
 import { categoryLabel } from "@/lib/categories";
-import { suggestOutfit, type ItemScores, type SuggestItem } from "@/lib/suggest-outfit";
+import { suggestOutfit, type Occasion, type ItemScores, type SuggestItem } from "@/lib/suggest-outfit";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import {
   Bell,
+  Briefcase,
+  Coffee,
+  Dumbbell,
+  Handshake,
+  Home as HomeIcon,
   Sun,
   Heart,
   ArrowLeftRight,
@@ -26,6 +31,14 @@ import {
   X,
 } from "lucide-react";
 
+const OCCASIONS: { value: Occasion; label: string; icon: typeof Briefcase }[] = [
+  { value: "buero", label: "Büro", icon: Briefcase },
+  { value: "kundentermin", label: "Kundentermin", icon: Handshake },
+  { value: "homeoffice", label: "Homeoffice", icon: HomeIcon },
+  { value: "sport", label: "Sport", icon: Dumbbell },
+  { value: "frei", label: "Frei", icon: Coffee },
+];
+
 export const Route = createFileRoute("/_authenticated/")({
   component: Home,
   head: () => ({
@@ -41,37 +54,36 @@ function Home() {
 
   const today = format(new Date(), "yyyy-MM-dd");
 
-  const { data } = useQuery({
+  const { data, isPending } = useQuery({
     queryKey: ["home"],
     queryFn: async () => {
-      const [{ data: items }, { data: plan }, { data: recent }, { data: profile }] = await Promise.all([
-        supabase
-          .from("wardrobe_items")
-          .select("id, name, image_url, ai_image_url, use_ai_image, category")
-          .order("created_at", { ascending: false })
-          .limit(200),
-        supabase
-          .from("outfit_plans")
-          .select("outfit_id, outfits(name, outfit_items(item_id, wardrobe_items(image_url, ai_image_url, use_ai_image)))")
-          .eq("planned_date", today)
-          .maybeSingle(),
-        supabase
-          .from("outfits")
-          .select("id, name, outfit_items(wardrobe_items(image_url, ai_image_url, use_ai_image))")
-          .order("created_at", { ascending: false })
-          .limit(4),
-        supabase.from("profiles").select("display_name").eq("id", user!.id).maybeSingle(),
-      ]);
+      const [{ data: items }, { data: plan }, { data: recent }, { data: profile }, { data: context }] =
+        await Promise.all([
+          supabase
+            .from("wardrobe_items")
+            .select("id, name, image_url, ai_image_url, use_ai_image, category")
+            .order("created_at", { ascending: false })
+            .limit(200),
+          supabase
+            .from("outfit_plans")
+            .select("outfit_id, outfits(name, outfit_items(item_id, wardrobe_items(image_url, ai_image_url, use_ai_image)))")
+            .eq("planned_date", today)
+            .maybeSingle(),
+          supabase
+            .from("outfits")
+            .select("id, name")
+            .order("created_at", { ascending: false })
+            .limit(1),
+          supabase.from("profiles").select("display_name").eq("id", user!.id).maybeSingle(),
+          supabase.from("daily_context").select("occasion").eq("context_date", today).maybeSingle(),
+        ]);
       const paths: string[] = [];
       items?.forEach((i) => i.image_url && paths.push(displayPath(i)));
       (plan as any)?.outfits?.outfit_items?.forEach((oi: any) =>
         oi.wardrobe_items && paths.push(displayPath(oi.wardrobe_items)),
       );
-      recent?.forEach((o: any) =>
-        o.outfit_items?.forEach((oi: any) => oi.wardrobe_items && paths.push(displayPath(oi.wardrobe_items))),
-      );
       const urls = await signedUrlsMap(paths);
-      return { items: items ?? [], plan, recent: recent ?? [], urls, profile };
+      return { items: items ?? [], plan, recent: recent ?? [], urls, profile, context };
     },
   });
 
@@ -82,6 +94,22 @@ function Home() {
   const allItems = (data?.items ?? []) as SuggestItem[];
   const [suggestion, setSuggestion] = useState<SuggestItem[]>([]);
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [occasion, setOccasion] = useState<Occasion | null>(null);
+  const [savingOccasion, setSavingOccasion] = useState(false);
+
+  useEffect(() => {
+    if (data?.context?.occasion) setOccasion(data.context.occasion as Occasion);
+  }, [data?.context?.occasion]);
+
+  async function chooseOccasion(o: Occasion) {
+    setOccasion(o);
+    setSavingOccasion(true);
+    const { error } = await supabase
+      .from("daily_context")
+      .upsert({ user_id: user!.id, context_date: today, occasion: o }, { onConflict: "user_id,context_date" });
+    setSavingOccasion(false);
+    if (error) toast.error("Konnte nicht gespeichert werden");
+  }
 
   const { data: feedback, refetch: refetchFeedback } = useQuery({
     queryKey: ["outfit-feedback"],
@@ -107,14 +135,14 @@ function Home() {
 
   useEffect(() => {
     if (allItems.length) {
-      setSuggestion(suggestOutfit(allItems, temp, scores));
+      setSuggestion(suggestOutfit(allItems, temp, scores, occasion));
       setFeedbackSent(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.items, temp, scores]);
+  }, [data?.items, temp, scores, occasion]);
 
   function newSuggestion() {
-    setSuggestion(suggestOutfit(allItems, temp, scores));
+    setSuggestion(suggestOutfit(allItems, temp, scores, occasion));
     setFeedbackSent(false);
   }
 
@@ -158,6 +186,11 @@ function Home() {
 
   const plannedOutfit = (data?.plan as any)?.outfits;
 
+  // Vor dem ersten Laden nichts anzeigen — sonst blitzt kurz die Anlass-Frage auf,
+  // obwohl eigentlich schon ein Outfit für heute geplant ist.
+  const showOccasionPicker = !isPending && !plannedOutfit;
+  const showSuggestion = !isPending && Boolean(plannedOutfit || occasion);
+
   return (
     <div className="px-6 pt-10">
       <header className="mb-8 flex items-start justify-between">
@@ -166,7 +199,6 @@ function Home() {
             <span className="font-serif">{greeting}</span>
             <Sun className="h-6 w-6 text-accent-foreground" strokeWidth={1.5} />
           </div>
-          <p className="mt-3 text-sm text-primary/70">Heutige Empfehlung</p>
           <WeatherWidget />
         </div>
         <button className="rounded-full border border-border p-2">
@@ -174,6 +206,33 @@ function Home() {
         </button>
       </header>
 
+      {showOccasionPicker && (
+        <section className="mb-8">
+          <h2 className="mb-3 text-xl">Was steht heute an?</h2>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {OCCASIONS.map((o) => {
+              const Icon = o.icon;
+              const active = occasion === o.value;
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => chooseOccasion(o.value)}
+                  disabled={savingOccasion}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-sm transition disabled:opacity-60 ${
+                    active ? "border-primary bg-accent" : "border-border bg-card hover:bg-secondary"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" strokeWidth={1.5} />
+                  {o.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {showSuggestion && (
       <section className="mb-8">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-xl">Dein Outfit für heute</h2>
@@ -258,71 +317,16 @@ function Home() {
           </div>
         )}
       </section>
-
-
-      <section className="mb-8">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xl">Mein Kleiderschrank</h2>
-          <Link to="/wardrobe" className="text-sm text-primary">
-            Alle anzeigen ›
-          </Link>
-        </div>
-        {data?.items?.length ? (
-          <div className="grid grid-cols-2 gap-3">
-            {data.items.slice(0, 4).map((it) => (
-              <Link
-                key={it.id}
-                to="/wardrobe"
-                className="overflow-hidden rounded-2xl bg-secondary"
-              >
-                <div className="aspect-square bg-secondary">
-                  {data.urls[displayPath(it)] && (
-                    <img src={data.urls[displayPath(it)]} alt="" className="h-full w-full object-cover" />
-                  )}
-                </div>
-                <div className="p-2 text-center text-sm">{categoryLabel(it.category)}</div>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <EmptyCard
-            title="Noch keine Teile"
-            hint="Füge dein erstes Kleidungsstück hinzu — die KI erkennt automatisch, was es ist."
-            ctaTo="/wardrobe/add"
-            ctaLabel="Teil hinzufügen"
-          />
-        )}
-      </section>
+      )}
 
       {data?.recent?.length ? (
-        <section className="mb-8">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xl">Zuletzt zusammengestellt</h2>
-            <Link to="/outfits" className="text-sm text-primary">
-              Alle anzeigen ›
-            </Link>
-          </div>
-          <div className="flex gap-3 overflow-x-auto pb-2">
-            {data.recent.map((o: any) => (
-              <Link
-                key={o.id}
-                to="/outfits"
-                className="w-40 shrink-0 rounded-2xl bg-secondary p-3"
-              >
-                <div className="grid grid-cols-2 gap-1">
-                  {o.outfit_items?.slice(0, 4).map((oi: any, i: number) => (
-                    <div key={i} className="aspect-square overflow-hidden rounded-md bg-card">
-                      {oi.wardrobe_items && data.urls[displayPath(oi.wardrobe_items)] && (
-                        <img src={data.urls[displayPath(oi.wardrobe_items)]} className="h-full w-full object-cover" alt="" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <p className="mt-2 truncate text-sm">{o.name}</p>
-              </Link>
-            ))}
-          </div>
-        </section>
+        <Link
+          to="/outfits"
+          className="mb-8 flex items-center justify-between text-sm text-muted-foreground"
+        >
+          <span>Zuletzt: {data.recent[0].name}</span>
+          <span className="text-primary">Alle Outfits ›</span>
+        </Link>
       ) : null}
     </div>
   );
@@ -710,23 +714,6 @@ function LocationSearch({
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function EmptyCard({
-  title, hint, ctaTo, ctaLabel,
-}: { title: string; hint: string; ctaTo: string; ctaLabel: string }) {
-  return (
-    <div className="rounded-3xl bg-card p-6 text-center shadow-sm">
-      <h3 className="text-lg">{title}</h3>
-      <p className="mt-2 text-sm text-muted-foreground">{hint}</p>
-      <Link
-        to={ctaTo}
-        className="mt-4 inline-flex rounded-full bg-primary px-5 py-2 text-sm text-primary-foreground"
-      >
-        {ctaLabel}
-      </Link>
     </div>
   );
 }

@@ -7,6 +7,8 @@ export type SuggestItem = {
   use_ai_image?: boolean | null;
 };
 
+export type Occasion = "buero" | "kundentermin" | "homeoffice" | "sport" | "frei";
+
 /** Score pro Item-ID: +1 pro "gefällt mir", -1 pro "nicht mein Stil". */
 export type ItemScores = Record<string, number>;
 
@@ -39,6 +41,7 @@ export function suggestOutfit(
   items: SuggestItem[],
   temp?: number | null,
   scores?: ItemScores,
+  occasion?: Occasion | null,
 ): SuggestItem[] {
   activeScores = scores ?? {};
   if (!items.length) return [];
@@ -47,13 +50,21 @@ export function suggestOutfit(
   const sport = items.filter((i) => i.category === "sport");
   const normal = items.filter((i) => i.category !== "sport");
 
+  // Sport ausdrücklich gewählt: Sport-Kombi bevorzugen, sonst auf normale Basis zurückfallen.
+  if (occasion === "sport" && sport.length >= 2) {
+    const shuffled = [...sport].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, Math.min(3, shuffled.length));
+  }
+
   // Sport-Outfit nur, wenn genug Sport-Teile da sind und keine normale Basis möglich ist
   const hasNormalBase =
     normal.some((i) => i.category === "kleider") ||
     (normal.some((i) => i.category === "oberteile") &&
       normal.some((i) => i.category === "hosen" || i.category === "roecke"));
 
-  if (!hasNormalBase && sport.length >= 2) {
+  // Ohne konkreten Anlass (oder explizit Sport) darf als Fallback trotzdem eine Sport-Kombi kommen,
+  // wenn keine normale Basis vorhanden ist. Bei Büro/Kundentermin/Homeoffice/Frei ist das unpassend.
+  if (!hasNormalBase && (occasion == null || occasion === "sport") && sport.length >= 2) {
     const shuffled = [...sport].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, Math.min(3, shuffled.length));
   }
@@ -85,7 +96,9 @@ export function suggestOutfit(
   if (out.length === 0) return [];
 
   const blazers = by("blazer");
-  if (blazers.length && !warm && (cold || Math.random() < 0.5)) {
+  const blazerChance =
+    occasion === "kundentermin" ? 0.9 : occasion === "buero" ? 0.65 : cold ? 0.7 : 0.5;
+  if (blazers.length && !warm && Math.random() < blazerChance) {
     const bl = pick(blazers);
     if (bl) out.push(bl);
   }
