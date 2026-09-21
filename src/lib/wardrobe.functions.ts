@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { wardrobeAuth } from "@/lib/wardrobe-auth";
 
 const ALLOWED = [
   "oberteile","hosen","kleider","blazer","roecke","schuhe","taschen","accessoires","sport","sonstiges",
@@ -7,7 +7,7 @@ const ALLOWED = [
 type Cat = (typeof ALLOWED)[number];
 
 export const smoothItemImage = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([...wardrobeAuth])
   .inputValidator((data: { imageDataUrl: string; focus?: string; category?: string; view?: "top" | "side"; correction?: string }) => {
     if (!data?.imageDataUrl?.startsWith("data:image/")) {
       throw new Error("imageDataUrl muss eine Data-URL sein");
@@ -70,8 +70,86 @@ export const smoothItemImage = createServerFn({ method: "POST" })
     return { b64: imgPart.inlineData.data as string };
   });
 
+export type MoodboardItemInput = {
+  imageDataUrl: string;
+  category: string;
+  name?: string | null;
+};
+
+export const composeOutfitMoodboard = createServerFn({ method: "POST" })
+  .middleware([...wardrobeAuth])
+  .inputValidator((data: { items: MoodboardItemInput[] }) => {
+    if (!Array.isArray(data?.items) || data.items.length < 2 || data.items.length > 6) {
+      throw new Error("Moodboard braucht 2–6 Teile");
+    }
+    for (const item of data.items) {
+      if (!item?.imageDataUrl?.startsWith("data:image/")) {
+        throw new Error("imageDataUrl muss eine Data-URL sein");
+      }
+    }
+    return data;
+  })
+  .handler(async ({ data }) => {
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey) throw new Error("KI ist gerade nicht verfügbar (kein API-Key konfiguriert)");
+
+    const clothingCats = new Set(["oberteile", "hosen", "kleider", "blazer", "roecke", "sport"]);
+    const labels = data.items
+      .map((it, i) => {
+        const role = clothingCats.has(it.category) ? "Kleidung" : "Accessoire/Schuhe";
+        const name = it.name?.trim() || it.category;
+        return `Bild ${i + 1}: ${name} (${it.category}, ${role})`;
+      })
+      .join("\n");
+
+    const promptText =
+      "Erzeuge EIN einziges professionelles Mode-Magazin Flat-Lay / Moodboard-Foto auf reinweißem Studio-Hintergrund. " +
+      "Komponiere AUSSCHLIESSLICH die mitgelieferten Kleidungsstücke und Accessoires aus den Eingabebildern zu einem koordinierten Outfit-Flatlay. " +
+      "Layout: große Kleidungsstücke (Oberteil, Hose/Rock/Kleid, Blazer) links/vertikal angeordnet; Schuhe, Tasche und Accessoires rechts/daneben, nicht überlappend, saubere Abstände wie in einem Editorial. " +
+      "Jedes Teil freigestellt, flach liegend, weiches Studiolicht, scharfe Kanten, keine Schattenflächen, keine Textur, keine Personen, keine Kleiderbügel, kein Text. " +
+      "WICHTIG: Farbe, Schnitt, Muster, Material und Proportionen jedes Teils exakt aus dem jeweiligen Eingabebild übernehmen — nichts erfinden, keine zusätzlichen Kleidungsstücke, keine Logos, keinen Text. " +
+      "Die Eingabebilder entsprechen genau diesen Teilen:\n" +
+      labels;
+
+    const imageParts = data.items.map((it) => {
+      const mime = it.imageDataUrl.slice(5, it.imageDataUrl.indexOf(";")) || "image/jpeg";
+      const rawB64 = it.imageDataUrl.slice(it.imageDataUrl.indexOf(",") + 1);
+      return { inline_data: { mime_type: mime, data: rawB64 } };
+    });
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: promptText }, ...imageParts],
+            },
+          ],
+          generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+        }),
+      },
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Moodboard fehlgeschlagen (${res.status})${body ? `: ${body.slice(0, 300)}` : ""}`);
+    }
+    const json = await res.json();
+    const parts = json?.candidates?.[0]?.content?.parts ?? [];
+    const imgPart = parts.find((p: any) => p.inlineData || p.inline_data);
+    const b64 = imgPart?.inlineData?.data ?? imgPart?.inline_data?.data;
+    if (!b64) {
+      const reason = json?.candidates?.[0]?.finishReason ?? json?.error?.message ?? "unbekannt";
+      throw new Error(`Kein Moodboard-Bild erhalten (${reason})`);
+    }
+    return { b64: b64 as string };
+  });
+
 export const classifyItem = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([...wardrobeAuth])
   .inputValidator((data: { imageDataUrl: string }) => {
     if (!data?.imageDataUrl?.startsWith("data:image/")) {
       throw new Error("imageDataUrl muss eine Data-URL sein");
@@ -146,7 +224,7 @@ type ExistingItem = { id: string; name: string; category: string; color: string 
 
 /** Erkennt ALLE Kleidungsstücke auf einem Foto (z. B. Gruppenfoto mehrerer Teile). */
 export const detectItems = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([...wardrobeAuth])
   .inputValidator((data: { imageDataUrl: string; existing?: ExistingItem[] }) => {
     if (!data?.imageDataUrl?.startsWith("data:image/")) {
       throw new Error("imageDataUrl muss eine Data-URL sein");
@@ -310,7 +388,7 @@ export const detectItems = createServerFn({ method: "POST" })
 
 /** Korrigiert Name/Kategorie/Farbe anhand einer Nutzerbeschreibung ("falsch erkannt"). */
 export const refineItem = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([...wardrobeAuth])
   .inputValidator((data: { correction?: string; imageDataUrl?: string; name?: string; category?: string; color?: string }) => {
     if (!data?.correction?.trim() && !data?.imageDataUrl?.startsWith("data:image/")) {
       throw new Error("Bitte kurz beschreiben oder ein Bild anhängen");

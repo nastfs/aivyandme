@@ -9,24 +9,23 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as McpRouteImport } from './routes/mcp'
-import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as McpRouteImport } from './routes/mcp'
+import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
+import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
-import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
-import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
-import { Route as AuthenticatedWardrobeIndexRouteImport } from './routes/_authenticated/wardrobe/index'
-import { Route as AuthenticatedOutfitsIndexRouteImport } from './routes/_authenticated/outfits/index'
-import { Route as AuthenticatedWardrobeAddRouteImport } from './routes/_authenticated/wardrobe/add'
-import { Route as AuthenticatedWardrobeIdRouteImport } from './routes/_authenticated/wardrobe/$id'
-import { Route as AuthenticatedOutfitsNewRouteImport } from './routes/_authenticated/outfits/new'
-import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
+import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
+import { Route as AuthenticatedOutfitsIndexRouteImport } from './routes/_authenticated/outfits/index'
+import { Route as AuthenticatedOutfitsNewRouteImport } from './routes/_authenticated/outfits/new'
+import { Route as AuthenticatedWardrobeIndexRouteImport } from './routes/_authenticated/wardrobe/index'
+import { Route as AuthenticatedWardrobeIdRouteImport } from './routes/_authenticated/wardrobe/$id'
+import { Route as AuthenticatedWardrobeAddRouteImport } from './routes/_authenticated/wardrobe/add'
 
-const McpRoute = McpRouteImport.update({
-  id: '/mcp',
-  path: '/mcp',
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -34,10 +33,23 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
-  id: '/_authenticated',
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Char91DotmcpChar93ListToolsRoute =
+  Char91DotmcpChar93ListToolsRouteImport.update({
+    id: '/.mcp/list-tools',
+    path: '/.mcp/list-tools',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char91DotwellKnownChar93OauthProtectedResourceRoute =
+  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -48,45 +60,10 @@ const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const Char91DotwellKnownChar93OauthProtectedResourceRoute =
-  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
-    id: '/.well-known/oauth-protected-resource',
-    path: '/.well-known/oauth-protected-resource',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const Char91DotmcpChar93ListToolsRoute =
-  Char91DotmcpChar93ListToolsRouteImport.update({
-    id: '/.mcp/list-tools',
-    path: '/.mcp/list-tools',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const AuthenticatedWardrobeIndexRoute =
-  AuthenticatedWardrobeIndexRouteImport.update({
-    id: '/wardrobe/',
-    path: '/wardrobe/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedOutfitsIndexRoute =
-  AuthenticatedOutfitsIndexRouteImport.update({
-    id: '/outfits/',
-    path: '/outfits/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedWardrobeAddRoute =
-  AuthenticatedWardrobeAddRouteImport.update({
-    id: '/wardrobe/add',
-    path: '/wardrobe/add',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedWardrobeIdRoute = AuthenticatedWardrobeIdRouteImport.update({
-  id: '/wardrobe/$id',
-  path: '/wardrobe/$id',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedOutfitsNewRoute = AuthenticatedOutfitsNewRouteImport.update({
-  id: '/outfits/new',
-  path: '/outfits/new',
-  getParentRoute: () => AuthenticatedRouteRoute,
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const Char91DotmcpChar93InvokeToolToolRoute =
   Char91DotmcpChar93InvokeToolToolRouteImport.update({
@@ -94,11 +71,34 @@ const Char91DotmcpChar93InvokeToolToolRoute =
     path: '/.mcp/invoke-tool/$tool',
     getParentRoute: () => rootRouteImport,
   } as any)
-const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
-  id: '/.lovable/oauth/consent',
-  path: '/.lovable/oauth/consent',
-  getParentRoute: () => rootRouteImport,
+const AuthenticatedOutfitsIndexRoute =
+  AuthenticatedOutfitsIndexRouteImport.update({
+    id: '/outfits/',
+    path: '/outfits/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedOutfitsNewRoute = AuthenticatedOutfitsNewRouteImport.update({
+  id: '/outfits/new',
+  path: '/outfits/new',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedWardrobeIndexRoute =
+  AuthenticatedWardrobeIndexRouteImport.update({
+    id: '/wardrobe/',
+    path: '/wardrobe/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedWardrobeIdRoute = AuthenticatedWardrobeIdRouteImport.update({
+  id: '/wardrobe/$id',
+  path: '/wardrobe/$id',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedWardrobeAddRoute =
+  AuthenticatedWardrobeAddRouteImport.update({
+    id: '/wardrobe/add',
+    path: '/wardrobe/add',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -208,11 +208,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/mcp': {
-      id: '/mcp'
-      path: '/mcp'
-      fullPath: '/mcp'
-      preLoaderRoute: typeof McpRouteImport
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -222,11 +222,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated': {
-      id: '/_authenticated'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.mcp/list-tools': {
+      id: '/.mcp/list-tools'
+      path: '/.mcp/list-tools'
+      fullPath: '/.mcp/list-tools'
+      preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/': {
@@ -243,46 +257,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProfileRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/.well-known/oauth-protected-resource': {
-      id: '/.well-known/oauth-protected-resource'
-      path: '/.well-known/oauth-protected-resource'
-      fullPath: '/.well-known/oauth-protected-resource'
-      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
+    '/.lovable/oauth/consent': {
+      id: '/.lovable/oauth/consent'
+      path: '/.lovable/oauth/consent'
+      fullPath: '/.lovable/oauth/consent'
+      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/.mcp/list-tools': {
-      id: '/.mcp/list-tools'
-      path: '/.mcp/list-tools'
-      fullPath: '/.mcp/list-tools'
-      preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
+    '/.mcp/invoke-tool/$tool': {
+      id: '/.mcp/invoke-tool/$tool'
+      path: '/.mcp/invoke-tool/$tool'
+      fullPath: '/.mcp/invoke-tool/$tool'
+      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/wardrobe/': {
-      id: '/_authenticated/wardrobe/'
-      path: '/wardrobe'
-      fullPath: '/wardrobe/'
-      preLoaderRoute: typeof AuthenticatedWardrobeIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/outfits/': {
       id: '/_authenticated/outfits/'
       path: '/outfits'
       fullPath: '/outfits/'
       preLoaderRoute: typeof AuthenticatedOutfitsIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/wardrobe/add': {
-      id: '/_authenticated/wardrobe/add'
-      path: '/wardrobe/add'
-      fullPath: '/wardrobe/add'
-      preLoaderRoute: typeof AuthenticatedWardrobeAddRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/wardrobe/$id': {
-      id: '/_authenticated/wardrobe/$id'
-      path: '/wardrobe/$id'
-      fullPath: '/wardrobe/$id'
-      preLoaderRoute: typeof AuthenticatedWardrobeIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/outfits/new': {
@@ -292,19 +285,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOutfitsNewRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/.mcp/invoke-tool/$tool': {
-      id: '/.mcp/invoke-tool/$tool'
-      path: '/.mcp/invoke-tool/$tool'
-      fullPath: '/.mcp/invoke-tool/$tool'
-      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/wardrobe/': {
+      id: '/_authenticated/wardrobe/'
+      path: '/wardrobe'
+      fullPath: '/wardrobe/'
+      preLoaderRoute: typeof AuthenticatedWardrobeIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/.lovable/oauth/consent': {
-      id: '/.lovable/oauth/consent'
-      path: '/.lovable/oauth/consent'
-      fullPath: '/.lovable/oauth/consent'
-      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/wardrobe/$id': {
+      id: '/_authenticated/wardrobe/$id'
+      path: '/wardrobe/$id'
+      fullPath: '/wardrobe/$id'
+      preLoaderRoute: typeof AuthenticatedWardrobeIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/wardrobe/add': {
+      id: '/_authenticated/wardrobe/add'
+      path: '/wardrobe/add'
+      fullPath: '/wardrobe/add'
+      preLoaderRoute: typeof AuthenticatedWardrobeAddRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
   }
 }

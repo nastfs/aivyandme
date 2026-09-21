@@ -3,6 +3,12 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 
+// Node 20: polyfill WebSocket for Supabase before any handlers run
+if (typeof (globalThis as { WebSocket?: unknown }).WebSocket === "undefined") {
+  const { WebSocket } = await import("ws");
+  (globalThis as { WebSocket: unknown }).WebSocket = WebSocket;
+}
+
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
 };
