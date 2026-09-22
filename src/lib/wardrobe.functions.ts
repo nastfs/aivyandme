@@ -34,7 +34,7 @@ export const smoothItemImage = createServerFn({ method: "POST" })
       (data.focus
                     ? `Auf diesem Foto sind mehrere Kleidungsstücke zu sehen. Nimm AUSSCHLIESSLICH dieses eine Teil: "${data.focus}". Alle anderen Kleidungsstücke, Objekte und Personen müssen komplett verschwinden. `
                     : "") +
-                  "Erzeuge ein professionelles E-Commerce-Produktfoto (Stockfoto-Look) des Kleidungsstücks. Entferne den kompletten Hintergrund und ersetze ihn durch einen komplett gleichmäßigen, reinweißen Studio-Hintergrund ohne Schatten, Textur, Möbel oder Raumdetails. Entferne Hände, Arme, Personen, Kleiderbügel und alles andere, was das Teil hält. Zeige das Teil freigestellt, mittig, gerade ausgerichtet und flach/glatt liegend wie im Online-Shop-Katalog, mit weichem, gleichmäßigem Studiolicht und scharfen sauberen Kanten. Wichtig: Das Kleidungsstück selbst darf NICHT verändert oder verschönert werden — Schnitt, Proportionen, Farbe, Muster, Material, Gebrauchsspuren, Flecken und Knötchen müssen exakt erhalten bleiben. Nur Halte-Falten glätten und den Hintergrund entfernen. Wenn Teile der Silhouette im Eingabebild nicht sichtbar sind (z. B. durch Verdeckung oder Bildausschnitt), ergänze diese Bereiche NUR minimal und in exakt der Linienführung, die der sichtbare Teil bereits vorgibt — erfinde niemals zusätzliche Schnittdetails, Rüschen, Stufen, Muster oder Verzierungen, die im Originalfoto nicht eindeutig zu erkennen sind. Im Zweifel schlichter und näher am Original bleiben statt kreativer." +
+                  "Erzeuge ein professionelles E-Commerce-Produktfoto (Stockfoto-Look) des Kleidungsstücks. Entferne den kompletten Hintergrund und ersetze ihn durch einen komplett gleichmäßigen, reinweißen Studio-Hintergrund (#FFFFFF) ohne Grau, Beige, Schattenplatten, Textur, Möbel oder Raumdetails. Auch bei Schuhen und Taschen muss der Hintergrund exakt dasselbe Reinweiß sein wie bei Oberteilen. Entferne Hände, Arme, Personen, Kleiderbügel und alles andere, was das Teil hält. Zeige das Teil freigestellt, mittig, gerade ausgerichtet und flach/glatt liegend wie im Online-Shop-Katalog, mit weichem, gleichmäßigem Studiolicht und scharfen sauberen Kanten. Wichtig: Das Kleidungsstück selbst darf NICHT verändert oder verschönert werden — Schnitt, Proportionen, Farbe, Muster, Material, Gebrauchsspuren, Flecken und Knötchen müssen exakt erhalten bleiben. Nur Halte-Falten glätten und den Hintergrund entfernen. Wenn Teile der Silhouette im Eingabebild nicht sichtbar sind (z. B. durch Verdeckung oder Bildausschnitt), ergänze diese Bereiche NUR minimal und in exakt der Linienführung, die der sichtbare Teil bereits vorgibt — erfinde niemals zusätzliche Schnittdetails, Rüschen, Stufen, Muster oder Verzierungen, die im Originalfoto nicht eindeutig zu erkennen sind. Im Zweifel schlichter und näher am Original bleiben statt kreativer." +
                   personRule +
                   correctionRule +
       shoeRule +
@@ -94,7 +94,25 @@ export const composeOutfitMoodboard = createServerFn({ method: "POST" })
     if (!apiKey) throw new Error("KI ist gerade nicht verfügbar (kein API-Key konfiguriert)");
 
     const clothingCats = new Set(["oberteile", "hosen", "kleider", "blazer", "roecke", "sport"]);
-    const labels = data.items
+    const layoutOrder = [
+      "oberteile",
+      "blazer",
+      "kleider",
+      "hosen",
+      "roecke",
+      "sport",
+      "taschen",
+      "accessoires",
+      "schuhe",
+      "sonstiges",
+    ];
+    const ordered = [...data.items].sort(
+      (a, b) =>
+        (layoutOrder.indexOf(a.category) === -1 ? 99 : layoutOrder.indexOf(a.category)) -
+        (layoutOrder.indexOf(b.category) === -1 ? 99 : layoutOrder.indexOf(b.category)),
+    );
+
+    const labels = ordered
       .map((it, i) => {
         const role = clothingCats.has(it.category) ? "Kleidung" : "Accessoire/Schuhe";
         const name = it.name?.trim() || it.category;
@@ -103,15 +121,24 @@ export const composeOutfitMoodboard = createServerFn({ method: "POST" })
       .join("\n");
 
     const promptText =
-      "Erzeuge EIN einziges professionelles Mode-Magazin Flat-Lay / Moodboard-Foto auf reinweißem Studio-Hintergrund. " +
-      "Komponiere AUSSCHLIESSLICH die mitgelieferten Kleidungsstücke und Accessoires aus den Eingabebildern zu einem koordinierten Outfit-Flatlay. " +
-      "Layout: große Kleidungsstücke (Oberteil, Hose/Rock/Kleid, Blazer) links/vertikal angeordnet; Schuhe, Tasche und Accessoires rechts/daneben, nicht überlappend, saubere Abstände wie in einem Editorial. " +
-      "Jedes Teil freigestellt, flach liegend, weiches Studiolicht, scharfe Kanten, keine Schattenflächen, keine Textur, keine Personen, keine Kleiderbügel, kein Text. " +
-      "WICHTIG: Farbe, Schnitt, Muster, Material und Proportionen jedes Teils exakt aus dem jeweiligen Eingabebild übernehmen — nichts erfinden, keine zusätzlichen Kleidungsstücke, keine Logos, keinen Text. " +
-      "Die Eingabebilder entsprechen genau diesen Teilen:\n" +
+      "Erzeuge EIN einziges professionelles Mode-Magazin Flat-Lay / Moodboard-Foto. " +
+      "Hintergrund: durchgehend reinweiß (#FFFFFF) — identisch hinter JEDEM Teil, auch hinter Schuhen und Taschen. " +
+      "Keine grauen, beigen, cremefarbenen oder farbigen Flächen, Podeste, Schattenplatten oder unterschiedlichen Hintergründe pro Objekt. " +
+      "Komponiere AUSSCHLIESSLICH die mitgelieferten Kleidungsstücke und Accessoires aus den Eingabebildern. " +
+      "STRIKTES Layout (Editorial, portrait): " +
+      "OBEN links/mitte: Oberteile und Jacken/Blazer (niemals unten); " +
+      "DARUNTER: Hosen, Röcke oder Kleider; " +
+      "RECHTS daneben (mittig bis unten): Tasche und Accessoires; " +
+      "UNTEN rechts: Schuhe. " +
+      "Große Kleidungsstücke dominieren die linke Hälfte; Accessoires sind kleiner und rechts. " +
+      "Nichts überlappen, gleichmäßige Abstände, ausgewogene Komposition, alles vollständig sichtbar, kein Abschneiden. " +
+      "Jedes Teil freigestellt, flach liegend, weiches Studiolicht, scharfe Kanten, keine Personen, keine Kleiderbügel, kein Text. " +
+      "Wenn ein Eingabebild einen grauen oder andersfarbigen Hintergrund hat: ersetze ihn durch denselben reinweißen Hintergrund wie bei den anderen Teilen. " +
+      "WICHTIG: Farbe, Schnitt, Muster, Material und Proportionen jedes Teils exakt aus dem jeweiligen Eingabebild übernehmen — nichts erfinden, keine zusätzlichen Kleidungsstücke. " +
+      "Die Eingabebilder entsprechen genau diesen Teilen (bereits in Layout-Reihenfolge):\n" +
       labels;
 
-    const imageParts = data.items.map((it) => {
+    const imageParts = ordered.map((it) => {
       const mime = it.imageDataUrl.slice(5, it.imageDataUrl.indexOf(";")) || "image/jpeg";
       const rawB64 = it.imageDataUrl.slice(it.imageDataUrl.indexOf(",") + 1);
       return { inline_data: { mime_type: mime, data: rawB64 } };

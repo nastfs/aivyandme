@@ -48,12 +48,16 @@ async function urlToDataUrl(url: string, maxSide = 768): Promise<string> {
   const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
   const w = Math.max(1, Math.round(bitmap.width * scale));
   const h = Math.max(1, Math.round(bitmap.height * scale));
+  // Square white canvas so shoes/bags and clothing share the same background when composed
+  const side = Math.max(w, h);
   const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
+  canvas.width = side;
+  canvas.height = side;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas nicht verfügbar");
-  ctx.drawImage(bitmap, 0, 0, w, h);
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(0, 0, side, side);
+  ctx.drawImage(bitmap, (side - w) / 2, (side - h) / 2, w, h);
   bitmap.close();
   return canvas.toDataURL("image/jpeg", 0.85);
 }
@@ -390,9 +394,9 @@ function Home() {
               <p className="mb-3 font-medium">{plannedOutfit.name}</p>
             ) : null}
             {(moodboardLoading || moodboardSrc) && (
-              <div className="mb-3 overflow-hidden rounded-2xl border border-border bg-secondary">
+              <div className="mb-3 overflow-hidden rounded-2xl border border-border bg-white">
                 {moodboardLoading || !moodboardSrc ? (
-                  <div className="flex aspect-[4/5] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex aspect-[4/5] flex-col items-center justify-center gap-2 bg-secondary text-sm text-muted-foreground">
                     <Loader2 className="h-6 w-6 animate-spin" strokeWidth={1.5} />
                     Moodboard wird erstellt…
                   </div>
@@ -413,13 +417,13 @@ function Home() {
                       type="button"
                       onClick={() => openReplace(idx)}
                       title="Teil austauschen"
-                      className="aspect-square w-full overflow-hidden rounded-2xl bg-secondary transition hover:opacity-90"
+                      className="aspect-square w-full overflow-hidden rounded-2xl bg-white transition hover:opacity-90"
                     >
                       {data?.urls[displayPath(it)] && (
                         <img
                           src={data.urls[displayPath(it)]}
                           alt={it.name ?? categoryLabel(it.category)}
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-contain"
                         />
                       )}
                     </button>
@@ -525,12 +529,12 @@ function Home() {
                     onClick={() => pickFromWardrobe(it)}
                     className="text-left transition hover:opacity-90"
                   >
-                    <div className="aspect-square overflow-hidden rounded-2xl border border-border bg-secondary">
+                    <div className="aspect-square overflow-hidden rounded-2xl border border-border bg-white">
                       {data?.urls[displayPath(it)] && (
                         <img
                           src={data.urls[displayPath(it)]}
                           alt={it.name ?? categoryLabel(it.category)}
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-contain"
                         />
                       )}
                     </div>
