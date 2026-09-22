@@ -1,15 +1,29 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { signedUrlsMap, displayPath } from "@/lib/storage";
 import { categoryLabel } from "@/lib/categories";
-import { suggestOutfit, type ItemScores, type SuggestItem } from "@/lib/suggest-outfit";
+import { suggestOutfit, type Occasion, type ItemScores, type SuggestItem } from "@/lib/suggest-outfit";
+import { composeOutfitMoodboard } from "@/lib/wardrobe.functions";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { de } from "date-fns/locale";
 import {
   Bell,
+  Briefcase,
+  Coffee,
+  Dumbbell,
+  Handshake,
+  Home as HomeIcon,
   Sun,
   Heart,
   ArrowLeftRight,
@@ -21,10 +35,40 @@ import {
   CloudSun,
   Loader2,
   MapPin,
+  Plus,
   RefreshCw,
   Search,
+  Trash2,
   X,
 } from "lucide-react";
+
+async function urlToDataUrl(url: string, maxSide = 768): Promise<string> {
+  const blob = await (await fetch(url)).blob();
+  const bitmap = await createImageBitmap(blob);
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const w = Math.max(1, Math.round(bitmap.width * scale));
+  const h = Math.max(1, Math.round(bitmap.height * scale));
+  // Square white canvas so shoes/bags and clothing share the same background when composed
+  const side = Math.max(w, h);
+  const canvas = document.createElement("canvas");
+  canvas.width = side;
+  canvas.height = side;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas nicht verfügbar");
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(0, 0, side, side);
+  ctx.drawImage(bitmap, (side - w) / 2, (side - h) / 2, w, h);
+  bitmap.close();
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
+
+const OCCASIONS: { value: Occasion; label: string; icon: typeof Briefcase }[] = [
+  { value: "buero", label: "Büro", icon: Briefcase },
+  { value: "kundentermin", label: "Kundentermin", icon: Handshake },
+  { value: "homeoffice", label: "Homeoffice", icon: HomeIcon },
+  { value: "sport", label: "Sport", icon: Dumbbell },
+  { value: "frei", label: "Frei", icon: Coffee },
+];
 
 export const Route = createFileRoute("/_authenticated/")({
   component: Home,
@@ -38,40 +82,42 @@ export const Route = createFileRoute("/_authenticated/")({
 
 function Home() {
   const { user } = Route.useRouteContext();
+  const composeMoodboard = useServerFn(composeOutfitMoodboard);
 
   const today = format(new Date(), "yyyy-MM-dd");
 
-  const { data } = useQuery({
+  const { data, isPending } = useQuery({
     queryKey: ["home"],
     queryFn: async () => {
-      const [{ data: items }, { data: plan }, { data: recent }, { data: profile }] = await Promise.all([
-        supabase
-          .from("wardrobe_items")
-          .select("id, name, image_url, ai_image_url, use_ai_image, category")
-          .order("created_at", { ascending: false })
-          .limit(200),
-        supabase
-          .from("outfit_plans")
-          .select("outfit_id, outfits(name, outfit_items(item_id, wardrobe_items(image_url, ai_image_url, use_ai_image)))")
-          .eq("planned_date", today)
-          .maybeSingle(),
-        supabase
-          .from("outfits")
-          .select("id, name, outfit_items(wardrobe_items(image_url, ai_image_url, use_ai_image))")
-          .order("created_at", { ascending: false })
-          .limit(4),
-        supabase.from("profiles").select("display_name").eq("id", user!.id).maybeSingle(),
-      ]);
+      const [{ data: items }, { data: plan }, { data: recent }, { data: profile }, { data: context }] =
+        await Promise.all([
+          supabase
+            .from("wardrobe_items")
+            .select("id, name, image_url, ai_image_url, use_ai_image, category")
+            .order("created_at", { ascending: false })
+            .limit(200),
+          supabase
+            .from("outfit_plans")
+            .select(
+              "outfit_id, outfits(name, outfit_items(item_id, wardrobe_items(id, name, category, image_url, ai_image_url, use_ai_image)))",
+            )
+            .eq("planned_date", today)
+            .maybeSingle(),
+          supabase
+            .from("outfits")
+            .select("id, name")
+            .order("created_at", { ascending: false })
+            .limit(1),
+          supabase.from("profiles").select("display_name").eq("id", user!.id).maybeSingle(),
+          supabase.from("daily_context").select("occasion").eq("context_date", today).maybeSingle(),
+        ]);
       const paths: string[] = [];
       items?.forEach((i) => i.image_url && paths.push(displayPath(i)));
       (plan as any)?.outfits?.outfit_items?.forEach((oi: any) =>
         oi.wardrobe_items && paths.push(displayPath(oi.wardrobe_items)),
       );
-      recent?.forEach((o: any) =>
-        o.outfit_items?.forEach((oi: any) => oi.wardrobe_items && paths.push(displayPath(oi.wardrobe_items))),
-      );
       const urls = await signedUrlsMap(paths);
-      return { items: items ?? [], plan, recent: recent ?? [], urls, profile };
+      return { items: items ?? [], plan, recent: recent ?? [], urls, profile, context };
     },
   });
 
@@ -82,6 +128,58 @@ function Home() {
   const allItems = (data?.items ?? []) as SuggestItem[];
   const [suggestion, setSuggestion] = useState<SuggestItem[]>([]);
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [occasion, setOccasion] = useState<Occasion | null>(null);
+  const [savingOccasion, setSavingOccasion] = useState(false);
+  const [moodboardSrc, setMoodboardSrc] = useState<string | null>(null);
+  const [moodboardLoading, setMoodboardLoading] = useState(false);
+  const [picker, setPicker] = useState<{ mode: "replace"; index: number } | { mode: "add" } | null>(
+    null,
+  );
+  const [pieces, setPieces] = useState<SuggestItem[]>([]);
+  const moodboardReqId = useRef(0);
+  const lastMoodboardKey = useRef<string>("");
+
+  const plannedOutfit = (data?.plan as any)?.outfits;
+
+  const sourcePieces = useMemo(() => {
+    if (plannedOutfit?.outfit_items?.length) {
+      return (plannedOutfit.outfit_items as any[])
+        .map((oi) => oi.wardrobe_items)
+        .filter(Boolean)
+        .map((w: any) => ({
+          id: w.id ?? displayPath(w),
+          name: w.name ?? null,
+          category: w.category ?? "sonstiges",
+          image_url: w.image_url,
+          ai_image_url: w.ai_image_url,
+          use_ai_image: w.use_ai_image,
+        })) as SuggestItem[];
+    }
+    return suggestion;
+  }, [plannedOutfit, suggestion]);
+
+  const sourceKey = sourcePieces.map((i) => i.id).join(",");
+
+  useEffect(() => {
+    setPieces(sourcePieces);
+  }, [sourceKey]); // eslint-disable-line react-hooks/exhaustive-deps -- sync when server/suggestion set changes
+
+  /** Editable pieces drive the magazine moodboard. */
+  const moodboardItems = pieces;
+
+  useEffect(() => {
+    if (data?.context?.occasion) setOccasion(data.context.occasion as Occasion);
+  }, [data?.context?.occasion]);
+
+  async function chooseOccasion(o: Occasion) {
+    setOccasion(o);
+    setSavingOccasion(true);
+    const { error } = await supabase
+      .from("daily_context")
+      .upsert({ user_id: user!.id, context_date: today, occasion: o }, { onConflict: "user_id,context_date" });
+    setSavingOccasion(false);
+    if (error) toast.error("Konnte nicht gespeichert werden");
+  }
 
   const { data: feedback, refetch: refetchFeedback } = useQuery({
     queryKey: ["outfit-feedback"],
@@ -107,23 +205,23 @@ function Home() {
 
   useEffect(() => {
     if (allItems.length) {
-      setSuggestion(suggestOutfit(allItems, temp, scores));
+      setSuggestion(suggestOutfit(allItems, temp, scores, occasion));
       setFeedbackSent(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.items, temp, scores]);
+  }, [data?.items, temp, scores, occasion]);
 
   function newSuggestion() {
-    setSuggestion(suggestOutfit(allItems, temp, scores));
+    setSuggestion(suggestOutfit(allItems, temp, scores, occasion));
     setFeedbackSent(false);
   }
 
   async function rate(liked: boolean) {
-    if (feedbackSent || !suggestion.length) return;
+    if (feedbackSent || !pieces.length) return;
     setFeedbackSent(true);
     const { error } = await supabase.from("outfit_feedback").insert({
       user_id: user!.id,
-      item_ids: suggestion.map((i) => i.id),
+      item_ids: pieces.map((i) => i.id),
       liked,
     });
     if (error) {
@@ -135,28 +233,110 @@ function Home() {
     refetchFeedback();
   }
 
-  /** Ersetzt genau ein Teil durch eine Alternative derselben Kategorie. */
-  function swapItem(index: number) {
-    setSuggestion((prev) => {
-      const item = prev[index];
-      if (!item) return prev;
-      const others = new Set(prev.filter((_, i) => i !== index).map((i) => i.id));
-      const alternatives = allItems.filter(
-        (i) => i.category === item.category && i.id !== item.id && !others.has(i.id),
-      );
-      if (!alternatives.length) return prev;
-      const alt = alternatives[Math.floor(Math.random() * alternatives.length)];
-      const next = [...prev];
-      next[index] = alt;
-      return next;
-    });
+  /** Öffnet die Auswahl, um ein Teil aus dem Kleiderschrank zu ersetzen. */
+  function openReplace(index: number) {
+    setPicker({ mode: "replace", index });
   }
 
-  function hasAlternative(item: SuggestItem) {
-    return allItems.some((i) => i.category === item.category && i.id !== item.id);
+  function openAdd() {
+    if (pieces.length >= 6) {
+      toast.error("Maximal 6 Teile im Outfit");
+      return;
+    }
+    setPicker({ mode: "add" });
   }
 
-  const plannedOutfit = (data?.plan as any)?.outfits;
+  function pickFromWardrobe(item: SuggestItem) {
+    if (!picker) return;
+    if (picker.mode === "replace") {
+      setPieces((prev) => {
+        const next = [...prev];
+        next[picker.index] = item;
+        return next;
+      });
+    } else {
+      setPieces((prev) => (prev.length >= 6 ? prev : [...prev, item]));
+    }
+    setFeedbackSent(false);
+    setPicker(null);
+  }
+
+  function removePiece(index: number) {
+    setPieces((prev) => prev.filter((_, i) => i !== index));
+    setFeedbackSent(false);
+  }
+
+  const replacingItem =
+    picker?.mode === "replace" ? pieces[picker.index] : null;
+  const pickerCandidates = useMemo(() => {
+    if (!picker) return [] as SuggestItem[];
+    const used = new Set(pieces.map((i) => i.id));
+    const available = allItems.filter((i) => !used.has(i.id));
+    if (picker.mode === "replace" && replacingItem) {
+      const sameCategory = available.filter((i) => i.category === replacingItem.category);
+      if (sameCategory.length) return sameCategory;
+    }
+    return available;
+  }, [allItems, picker, pieces, replacingItem]);
+
+  useEffect(() => {
+    if (moodboardItems.length < 2 || !data?.urls) {
+      setMoodboardSrc(null);
+      setMoodboardLoading(false);
+      lastMoodboardKey.current = "";
+      return;
+    }
+
+    const key = moodboardItems.map((i) => i.id).join(",");
+    // Skip only if we already successfully generated this exact set
+    if (key === lastMoodboardKey.current && moodboardSrc) return;
+
+    const reqId = ++moodboardReqId.current;
+    let cancelled = false;
+    setMoodboardLoading(true);
+    setMoodboardSrc(null);
+
+    (async () => {
+      try {
+        const items = [];
+        for (const it of moodboardItems.slice(0, 6)) {
+          const url = data.urls[displayPath(it)];
+          if (!url) continue;
+          const imageDataUrl = await urlToDataUrl(url);
+          items.push({ imageDataUrl, category: it.category, name: it.name });
+        }
+        if (cancelled || reqId !== moodboardReqId.current) return;
+        if (items.length < 2) {
+          setMoodboardLoading(false);
+          return;
+        }
+        const { b64 } = await composeMoodboard({ data: { items } });
+        if (cancelled || reqId !== moodboardReqId.current) return;
+        setMoodboardSrc(`data:image/png;base64,${b64}`);
+        lastMoodboardKey.current = key;
+      } catch (err: any) {
+        if (cancelled || reqId !== moodboardReqId.current) return;
+        console.error("[moodboard]", err);
+        toast.error(err?.message ?? "Moodboard konnte nicht erstellt werden");
+        setMoodboardSrc(null);
+        // Allow retry on next effect for the same key after a failure
+        lastMoodboardKey.current = "";
+      } finally {
+        if (!cancelled && reqId === moodboardReqId.current) setMoodboardLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // moodboardSrc intentionally omitted — only used as guard above
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moodboardItems, data?.urls, composeMoodboard]);
+
+  // Vor dem ersten Laden nichts anzeigen — sonst blitzt kurz die Anlass-Frage auf,
+  // obwohl eigentlich schon ein Outfit für heute geplant ist.
+  const showOccasionPicker = !isPending && !plannedOutfit;
+  const showSuggestion = !isPending && Boolean(plannedOutfit || occasion);
 
   return (
     <div className="px-6 pt-10">
@@ -166,7 +346,6 @@ function Home() {
             <span className="font-serif">{greeting}</span>
             <Sun className="h-6 w-6 text-accent-foreground" strokeWidth={1.5} />
           </div>
-          <p className="mt-3 text-sm text-primary/70">Heutige Empfehlung</p>
           <WeatherWidget />
         </div>
         <button className="rounded-full border border-border p-2">
@@ -174,6 +353,33 @@ function Home() {
         </button>
       </header>
 
+      {showOccasionPicker && (
+        <section className="mb-8">
+          <h2 className="mb-3 text-xl">Was steht heute an?</h2>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {OCCASIONS.map((o) => {
+              const Icon = o.icon;
+              const active = occasion === o.value;
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => chooseOccasion(o.value)}
+                  disabled={savingOccasion}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-sm transition disabled:opacity-60 ${
+                    active ? "border-primary bg-accent" : "border-border bg-card hover:bg-secondary"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" strokeWidth={1.5} />
+                  {o.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {showSuggestion && (
       <section className="mb-8">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-xl">Dein Outfit für heute</h2>
@@ -182,45 +388,62 @@ function Home() {
           </span>
         </div>
 
-        {plannedOutfit ? (
+        {pieces.length ? (
           <div className="rounded-3xl bg-card p-4 shadow-sm">
-            <p className="mb-3 font-medium">{plannedOutfit.name}</p>
-            <div className="flex gap-2 overflow-x-auto">
-              {plannedOutfit.outfit_items?.map((oi: any, i: number) => (
-                <img
-                  key={i}
-                  src={data?.urls[oi.wardrobe_items ? displayPath(oi.wardrobe_items) : ""] ?? ""}
-                  className="h-24 w-24 rounded-2xl bg-secondary object-cover"
-                  alt=""
-                />
-              ))}
-            </div>
-          </div>
-        ) : suggestion.length ? (
-          <div className="rounded-3xl bg-card p-4 shadow-sm">
-            <div className="flex gap-3 overflow-x-auto pb-1">
-              {suggestion.map((it, idx) => (
-                <div key={it.id} className="w-24 shrink-0">
+            {plannedOutfit?.name ? (
+              <p className="mb-3 font-medium">{plannedOutfit.name}</p>
+            ) : null}
+            {(moodboardLoading || moodboardSrc) && (
+              <div className="mb-3 overflow-hidden rounded-2xl border border-border bg-white">
+                {moodboardLoading || !moodboardSrc ? (
+                  <div className="flex aspect-[4/5] flex-col items-center justify-center gap-2 bg-secondary text-sm text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin" strokeWidth={1.5} />
+                    Moodboard wird erstellt…
+                  </div>
+                ) : (
+                  <img
+                    src={moodboardSrc}
+                    alt="Outfit-Moodboard für heute"
+                    className="aspect-[4/5] w-full bg-white object-contain"
+                  />
+                )}
+              </div>
+            )}
+            <div className="flex gap-3 overflow-x-auto rounded-2xl border border-border bg-background/50 p-3 pb-2">
+              {pieces.map((it, idx) => (
+                <div key={`${it.id}-${idx}`} className="group w-24 shrink-0">
                   <div className="relative">
-                    <Link to="/wardrobe/$id" params={{ id: it.id }}>
-                      <div className="aspect-square overflow-hidden rounded-2xl bg-secondary">
-                        {data?.urls[displayPath(it)] && (
-                          <img
-                            src={data.urls[displayPath(it)]}
-                            alt={it.name ?? categoryLabel(it.category)}
-                            className="h-full w-full object-cover"
-                          />
-                        )}
-                      </div>
-                    </Link>
                     <button
-                      onClick={() => swapItem(idx)}
-                      disabled={!hasAlternative(it)}
-                      title="Keine Alternative im Schrank"
+                      type="button"
+                      onClick={() => openReplace(idx)}
+                      title="Teil austauschen"
+                      className="aspect-square w-full overflow-hidden rounded-2xl bg-white transition hover:opacity-90"
+                    >
+                      {data?.urls[displayPath(it)] && (
+                        <img
+                          src={data.urls[displayPath(it)]}
+                          alt={it.name ?? categoryLabel(it.category)}
+                          className="h-full w-full object-contain"
+                        />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openReplace(idx)}
+                      title="Teil tauschen"
                       aria-label="Teil tauschen"
-                      className="absolute right-1 top-1 rounded-full bg-background/90 p-1.5 text-muted-foreground shadow-sm transition hover:bg-secondary disabled:opacity-40"
+                      className="absolute left-1 top-1 rounded-full bg-background/90 p-1.5 text-muted-foreground shadow-sm opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-secondary"
                     >
                       <ArrowLeftRight className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removePiece(idx)}
+                      title="Teil entfernen"
+                      aria-label="Teil entfernen"
+                      className="absolute right-1 top-1 rounded-full bg-background/90 p-1.5 text-muted-foreground shadow-sm opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-secondary hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
                     </button>
                   </div>
                   <p className="mt-1 truncate text-center text-xs">
@@ -228,29 +451,47 @@ function Home() {
                   </p>
                 </div>
               ))}
+              {pieces.length < 6 && (
+                <div className="w-24 shrink-0">
+                  <button
+                    type="button"
+                    onClick={openAdd}
+                    title="Teil hinzufügen"
+                    aria-label="Teil hinzufügen"
+                    className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-border bg-background text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                  >
+                    <Plus className="h-5 w-5" strokeWidth={1.5} />
+                  </button>
+                  <p className="mt-1 truncate text-center text-xs text-muted-foreground">Hinzufügen</p>
+                </div>
+              )}
             </div>
-            <button
-              onClick={newSuggestion}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm transition hover:bg-secondary"
-            >
-              <RefreshCw className="h-4 w-4" strokeWidth={1.5} /> Neu vorschlagen
-            </button>
-            <div className="mt-2 flex items-center gap-2">
-              <button
-                onClick={() => rate(true)}
-                disabled={feedbackSent}
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-secondary disabled:opacity-40"
-              >
-                <Heart className="h-3.5 w-3.5" strokeWidth={1.5} /> Gefällt mir
-              </button>
-              <button
-                onClick={() => rate(false)}
-                disabled={feedbackSent}
-                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-secondary disabled:opacity-40"
-              >
-                <X className="h-3.5 w-3.5" strokeWidth={1.5} /> Nicht mein Stil
-              </button>
-            </div>
+            {!plannedOutfit && (
+              <>
+                <button
+                  onClick={newSuggestion}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm transition hover:bg-secondary"
+                >
+                  <RefreshCw className="h-4 w-4" strokeWidth={1.5} /> Neu vorschlagen
+                </button>
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    onClick={() => rate(true)}
+                    disabled={feedbackSent}
+                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-secondary disabled:opacity-40"
+                  >
+                    <Heart className="h-3.5 w-3.5" strokeWidth={1.5} /> Gefällt mir
+                  </button>
+                  <button
+                    onClick={() => rate(false)}
+                    disabled={feedbackSent}
+                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-secondary disabled:opacity-40"
+                  >
+                    <X className="h-3.5 w-3.5" strokeWidth={1.5} /> Nicht mein Stil
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="rounded-3xl bg-card p-5 text-center text-sm text-muted-foreground shadow-sm">
@@ -258,71 +499,68 @@ function Home() {
           </div>
         )}
       </section>
+      )}
 
-
-      <section className="mb-8">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xl">Mein Kleiderschrank</h2>
-          <Link to="/wardrobe" className="text-sm text-primary">
-            Alle anzeigen ›
-          </Link>
-        </div>
-        {data?.items?.length ? (
-          <div className="grid grid-cols-2 gap-3">
-            {data.items.slice(0, 4).map((it) => (
-              <Link
-                key={it.id}
-                to="/wardrobe"
-                className="overflow-hidden rounded-2xl bg-secondary"
-              >
-                <div className="aspect-square bg-secondary">
-                  {data.urls[displayPath(it)] && (
-                    <img src={data.urls[displayPath(it)]} alt="" className="h-full w-full object-cover" />
-                  )}
-                </div>
-                <div className="p-2 text-center text-sm">{categoryLabel(it.category)}</div>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <EmptyCard
-            title="Noch keine Teile"
-            hint="Füge dein erstes Kleidungsstück hinzu — die KI erkennt automatisch, was es ist."
-            ctaTo="/wardrobe/add"
-            ctaLabel="Teil hinzufügen"
-          />
-        )}
-      </section>
-
-      {data?.recent?.length ? (
-        <section className="mb-8">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xl">Zuletzt zusammengestellt</h2>
-            <Link to="/outfits" className="text-sm text-primary">
-              Alle anzeigen ›
-            </Link>
-          </div>
-          <div className="flex gap-3 overflow-x-auto pb-2">
-            {data.recent.map((o: any) => (
-              <Link
-                key={o.id}
-                to="/outfits"
-                className="w-40 shrink-0 rounded-2xl bg-secondary p-3"
-              >
-                <div className="grid grid-cols-2 gap-1">
-                  {o.outfit_items?.slice(0, 4).map((oi: any, i: number) => (
-                    <div key={i} className="aspect-square overflow-hidden rounded-md bg-card">
-                      {oi.wardrobe_items && data.urls[displayPath(oi.wardrobe_items)] && (
-                        <img src={data.urls[displayPath(oi.wardrobe_items)]} className="h-full w-full object-cover" alt="" />
+      <Dialog open={picker != null} onOpenChange={(open) => !open && setPicker(null)}>
+        <DialogContent className="max-h-[85vh] overflow-hidden rounded-3xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {picker?.mode === "add" ? "Teil hinzufügen" : "Teil austauschen"}
+            </DialogTitle>
+            <DialogDescription>
+              {picker?.mode === "add"
+                ? "Wähle ein zusätzliches Teil aus deinem Kleiderschrank."
+                : replacingItem
+                  ? `Wähle ein anderes Teil aus deinem Kleiderschrank${
+                      pickerCandidates.some((c) => c.category === replacingItem.category)
+                        ? ` (${categoryLabel(replacingItem.category)})`
+                        : ""
+                    }.`
+                  : "Wähle ein Ersatzteil."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[55vh] overflow-y-auto pr-1">
+            {pickerCandidates.length ? (
+              <div className="grid grid-cols-3 gap-3">
+                {pickerCandidates.map((it) => (
+                  <button
+                    key={it.id}
+                    type="button"
+                    onClick={() => pickFromWardrobe(it)}
+                    className="text-left transition hover:opacity-90"
+                  >
+                    <div className="aspect-square overflow-hidden rounded-2xl border border-border bg-white">
+                      {data?.urls[displayPath(it)] && (
+                        <img
+                          src={data.urls[displayPath(it)]}
+                          alt={it.name ?? categoryLabel(it.category)}
+                          className="h-full w-full object-contain"
+                        />
                       )}
                     </div>
-                  ))}
-                </div>
-                <p className="mt-2 truncate text-sm">{o.name}</p>
-              </Link>
-            ))}
+                    <p className="mt-1 truncate text-xs">
+                      {it.name || categoryLabel(it.category)}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                Keine anderen Teile im Kleiderschrank verfügbar.
+              </p>
+            )}
           </div>
-        </section>
+        </DialogContent>
+      </Dialog>
+
+      {data?.recent?.length ? (
+        <Link
+          to="/outfits"
+          className="mb-8 flex items-center justify-between text-sm text-muted-foreground"
+        >
+          <span>Zuletzt: {data.recent[0].name}</span>
+          <span className="text-primary">Alle Outfits ›</span>
+        </Link>
       ) : null}
     </div>
   );
@@ -710,23 +948,6 @@ function LocationSearch({
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function EmptyCard({
-  title, hint, ctaTo, ctaLabel,
-}: { title: string; hint: string; ctaTo: string; ctaLabel: string }) {
-  return (
-    <div className="rounded-3xl bg-card p-6 text-center shadow-sm">
-      <h3 className="text-lg">{title}</h3>
-      <p className="mt-2 text-sm text-muted-foreground">{hint}</p>
-      <Link
-        to={ctaTo}
-        className="mt-4 inline-flex rounded-full bg-primary px-5 py-2 text-sm text-primary-foreground"
-      >
-        {ctaLabel}
-      </Link>
     </div>
   );
 }

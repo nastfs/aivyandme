@@ -18,6 +18,15 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
   }
 });
 
+/** Supabase auth middleware needs WebSocket; Node 20 has none — polyfill only on server. */
+const nodeWebSocketPolyfill = createMiddleware({ type: "function" }).server(async ({ next }) => {
+  if (typeof (globalThis as { WebSocket?: unknown }).WebSocket === "undefined") {
+    const { WebSocket } = await import("ws");
+    (globalThis as { WebSocket: unknown }).WebSocket = WebSocket;
+  }
+  return next();
+});
+
 // Start installs this automatically when src/start.ts is absent; defining the
 // file opts out, so re-add it explicitly to keep server functions protected
 // from cross-site requests.
@@ -26,6 +35,6 @@ const csrfMiddleware = createCsrfMiddleware({
 });
 
 export const startInstance = createStart(() => ({
-  functionMiddleware: [attachSupabaseAuth],
+  functionMiddleware: [nodeWebSocketPolyfill, attachSupabaseAuth],
   requestMiddleware: [errorMiddleware, csrfMiddleware],
 }));

@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { wardrobeAuth } from "@/lib/wardrobe-auth";
 
 const ALLOWED = [
   "oberteile","hosen","kleider","blazer","roecke","schuhe","taschen","accessoires","sport","sonstiges",
@@ -7,7 +7,7 @@ const ALLOWED = [
 type Cat = (typeof ALLOWED)[number];
 
 export const smoothItemImage = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([...wardrobeAuth])
   .inputValidator((data: { imageDataUrl: string; focus?: string; category?: string; view?: "top" | "side"; correction?: string }) => {
     if (!data?.imageDataUrl?.startsWith("data:image/")) {
       throw new Error("imageDataUrl muss eine Data-URL sein");
@@ -15,8 +15,8 @@ export const smoothItemImage = createServerFn({ method: "POST" })
     return data;
   })
   .handler(async ({ data }) => {
-    const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) throw new Error("KI ist gerade nicht verfügbar");
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey) throw new Error("KI ist gerade nicht verfügbar (kein API-Key konfiguriert)");
 
     const personRule =
       " Falls eine Person das Teil trägt: extrahiere nur das Kleidungsstück selbst und entferne Person, Haut, Haare und Körperteile vollständig; ergänze verdeckte Bereiche plausibel, ohne Schnitt, Farbe oder Muster zu verändern.";
@@ -34,7 +34,7 @@ export const smoothItemImage = createServerFn({ method: "POST" })
       (data.focus
                     ? `Auf diesem Foto sind mehrere Kleidungsstücke zu sehen. Nimm AUSSCHLIESSLICH dieses eine Teil: "${data.focus}". Alle anderen Kleidungsstücke, Objekte und Personen müssen komplett verschwinden. `
                     : "") +
-                  "Erzeuge ein professionelles E-Commerce-Produktfoto (Stockfoto-Look) des Kleidungsstücks. Entferne den kompletten Hintergrund und ersetze ihn durch einen komplett gleichmäßigen, reinweißen Studio-Hintergrund ohne Schatten, Textur, Möbel oder Raumdetails. Entferne Hände, Arme, Personen, Kleiderbügel und alles andere, was das Teil hält. Zeige das Teil freigestellt, mittig, gerade ausgerichtet und flach/glatt liegend wie im Online-Shop-Katalog, mit weichem, gleichmäßigem Studiolicht und scharfen sauberen Kanten. Wichtig: Das Kleidungsstück selbst darf NICHT verändert oder verschönert werden — Schnitt, Proportionen, Farbe, Muster, Material, Gebrauchsspuren, Flecken und Knötchen müssen exakt erhalten bleiben. Nur Halte-Falten glätten und den Hintergrund entfernen. Wenn Teile der Silhouette im Eingabebild nicht sichtbar sind (z. B. durch Verdeckung oder Bildausschnitt), ergänze diese Bereiche NUR minimal und in exakt der Linienführung, die der sichtbare Teil bereits vorgibt — erfinde niemals zusätzliche Schnittdetails, Rüschen, Stufen, Muster oder Verzierungen, die im Originalfoto nicht eindeutig zu erkennen sind. Im Zweifel schlichter und näher am Original bleiben statt kreativer." +
+                  "Erzeuge ein professionelles E-Commerce-Produktfoto (Stockfoto-Look) des Kleidungsstücks. Entferne den kompletten Hintergrund und ersetze ihn durch einen komplett gleichmäßigen, reinweißen Studio-Hintergrund (#FFFFFF) ohne Grau, Beige, Schattenplatten, Textur, Möbel oder Raumdetails. Auch bei Schuhen und Taschen muss der Hintergrund exakt dasselbe Reinweiß sein wie bei Oberteilen. Entferne Hände, Arme, Personen, Kleiderbügel und alles andere, was das Teil hält. Zeige das Teil freigestellt, mittig, gerade ausgerichtet und flach/glatt liegend wie im Online-Shop-Katalog, mit weichem, gleichmäßigem Studiolicht und scharfen sauberen Kanten. Wichtig: Das Kleidungsstück selbst darf NICHT verändert oder verschönert werden — Schnitt, Proportionen, Farbe, Muster, Material, Gebrauchsspuren, Flecken und Knötchen müssen exakt erhalten bleiben. Nur Halte-Falten glätten und den Hintergrund entfernen. Wenn Teile der Silhouette im Eingabebild nicht sichtbar sind (z. B. durch Verdeckung oder Bildausschnitt), ergänze diese Bereiche NUR minimal und in exakt der Linienführung, die der sichtbare Teil bereits vorgibt — erfinde niemals zusätzliche Schnittdetails, Rüschen, Stufen, Muster oder Verzierungen, die im Originalfoto nicht eindeutig zu erkennen sind. Im Zweifel schlichter und näher am Original bleiben statt kreativer." +
                   personRule +
                   correctionRule +
       shoeRule +
@@ -42,42 +42,141 @@ export const smoothItemImage = createServerFn({ method: "POST" })
 
     const mime = data.imageDataUrl.slice(5, data.imageDataUrl.indexOf(";")) || "image/jpeg";
     const rawB64 = data.imageDataUrl.slice(data.imageDataUrl.indexOf(",") + 1);
-    void mime;
-    void rawB64;
 
-    // Standard-Modell (Nano Banana 2) – Chat-Shape mit messages + modalities
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: promptText }, { inline_data: { mime_type: mime, data: rawB64 } }],
+            },
+          ],
+          generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+        }),
       },
-      body: JSON.stringify({
-        model: "google/gemini-3.1-flash-image",
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: promptText },
-              { type: "image_url", image_url: { url: data.imageDataUrl } },
-            ],
-          },
-        ],
-        modalities: ["image", "text"],
-      }),
-    });
-
+    );
     if (!res.ok) {
-      throw new Error(`Bildbearbeitung fehlgeschlagen (${res.status})`);
+      const body = await res.text().catch(() => "");
+      throw new Error(`Bildbearbeitung fehlgeschlagen (${res.status})${body ? `: ${body.slice(0, 300)}` : ""}`);
     }
     const json = await res.json();
-    const b64 = json?.data?.[0]?.b64_json;
-    if (!b64) throw new Error("Kein Bild erhalten");
-    return { b64 };
+    const parts = json?.candidates?.[0]?.content?.parts ?? [];
+    const imgPart = parts.find((p: any) => p.inlineData);
+    if (!imgPart) throw new Error("Kein Bild erhalten");
+    return { b64: imgPart.inlineData.data as string };
+  });
+
+export type MoodboardItemInput = {
+  imageDataUrl: string;
+  category: string;
+  name?: string | null;
+};
+
+export const composeOutfitMoodboard = createServerFn({ method: "POST" })
+  .middleware([...wardrobeAuth])
+  .inputValidator((data: { items: MoodboardItemInput[] }) => {
+    if (!Array.isArray(data?.items) || data.items.length < 2 || data.items.length > 6) {
+      throw new Error("Moodboard braucht 2–6 Teile");
+    }
+    for (const item of data.items) {
+      if (!item?.imageDataUrl?.startsWith("data:image/")) {
+        throw new Error("imageDataUrl muss eine Data-URL sein");
+      }
+    }
+    return data;
+  })
+  .handler(async ({ data }) => {
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey) throw new Error("KI ist gerade nicht verfügbar (kein API-Key konfiguriert)");
+
+    const clothingCats = new Set(["oberteile", "hosen", "kleider", "blazer", "roecke", "sport"]);
+    const layoutOrder = [
+      "oberteile",
+      "blazer",
+      "kleider",
+      "hosen",
+      "roecke",
+      "sport",
+      "taschen",
+      "accessoires",
+      "schuhe",
+      "sonstiges",
+    ];
+    const ordered = [...data.items].sort(
+      (a, b) =>
+        (layoutOrder.indexOf(a.category) === -1 ? 99 : layoutOrder.indexOf(a.category)) -
+        (layoutOrder.indexOf(b.category) === -1 ? 99 : layoutOrder.indexOf(b.category)),
+    );
+
+    const labels = ordered
+      .map((it, i) => {
+        const role = clothingCats.has(it.category) ? "Kleidung" : "Accessoire/Schuhe";
+        const name = it.name?.trim() || it.category;
+        return `Bild ${i + 1}: ${name} (${it.category}, ${role})`;
+      })
+      .join("\n");
+
+    const promptText =
+      "Erzeuge EIN einziges professionelles Mode-Magazin Flat-Lay / Moodboard-Foto. " +
+      "Hintergrund: durchgehend reinweiß (#FFFFFF) — identisch hinter JEDEM Teil, auch hinter Schuhen und Taschen. " +
+      "Keine grauen, beigen, cremefarbenen oder farbigen Flächen, Podeste, Schattenplatten oder unterschiedlichen Hintergründe pro Objekt. " +
+      "Komponiere AUSSCHLIESSLICH die mitgelieferten Kleidungsstücke und Accessoires aus den Eingabebildern. " +
+      "STRIKTES Layout (Editorial, portrait): " +
+      "OBEN links/mitte: Oberteile und Jacken/Blazer (niemals unten); " +
+      "DARUNTER: Hosen, Röcke oder Kleider; " +
+      "RECHTS daneben (mittig bis unten): Tasche und Accessoires; " +
+      "UNTEN rechts: Schuhe. " +
+      "Große Kleidungsstücke dominieren die linke Hälfte; Accessoires sind kleiner und rechts. " +
+      "Nichts überlappen, gleichmäßige Abstände, ausgewogene Komposition, alles vollständig sichtbar, kein Abschneiden. " +
+      "Jedes Teil freigestellt, flach liegend, weiches Studiolicht, scharfe Kanten, keine Personen, keine Kleiderbügel, kein Text. " +
+      "Wenn ein Eingabebild einen grauen oder andersfarbigen Hintergrund hat: ersetze ihn durch denselben reinweißen Hintergrund wie bei den anderen Teilen. " +
+      "WICHTIG: Farbe, Schnitt, Muster, Material und Proportionen jedes Teils exakt aus dem jeweiligen Eingabebild übernehmen — nichts erfinden, keine zusätzlichen Kleidungsstücke. " +
+      "Die Eingabebilder entsprechen genau diesen Teilen (bereits in Layout-Reihenfolge):\n" +
+      labels;
+
+    const imageParts = ordered.map((it) => {
+      const mime = it.imageDataUrl.slice(5, it.imageDataUrl.indexOf(";")) || "image/jpeg";
+      const rawB64 = it.imageDataUrl.slice(it.imageDataUrl.indexOf(",") + 1);
+      return { inline_data: { mime_type: mime, data: rawB64 } };
+    });
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: promptText }, ...imageParts],
+            },
+          ],
+          generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+        }),
+      },
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Moodboard fehlgeschlagen (${res.status})${body ? `: ${body.slice(0, 300)}` : ""}`);
+    }
+    const json = await res.json();
+    const parts = json?.candidates?.[0]?.content?.parts ?? [];
+    const imgPart = parts.find((p: any) => p.inlineData || p.inline_data);
+    const b64 = imgPart?.inlineData?.data ?? imgPart?.inline_data?.data;
+    if (!b64) {
+      const reason = json?.candidates?.[0]?.finishReason ?? json?.error?.message ?? "unbekannt";
+      throw new Error(`Kein Moodboard-Bild erhalten (${reason})`);
+    }
+    return { b64: b64 as string };
   });
 
 export const classifyItem = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([...wardrobeAuth])
   .inputValidator((data: { imageDataUrl: string }) => {
     if (!data?.imageDataUrl?.startsWith("data:image/")) {
       throw new Error("imageDataUrl muss eine Data-URL sein");
@@ -152,7 +251,7 @@ type ExistingItem = { id: string; name: string; category: string; color: string 
 
 /** Erkennt ALLE Kleidungsstücke auf einem Foto (z. B. Gruppenfoto mehrerer Teile). */
 export const detectItems = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([...wardrobeAuth])
   .inputValidator((data: { imageDataUrl: string; existing?: ExistingItem[] }) => {
     if (!data?.imageDataUrl?.startsWith("data:image/")) {
       throw new Error("imageDataUrl muss eine Data-URL sein");
@@ -160,7 +259,7 @@ export const detectItems = createServerFn({ method: "POST" })
     return data;
   })
   .handler(async ({ data }): Promise<{ items: DetectedItem[] }> => {
-    const apiKey = process.env.LOVABLE_API_KEY;
+    const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) throw new Error("KI ist aktuell nicht verfügbar (kein API-Key konfiguriert)");
 
     const existing = (data.existing ?? []).slice(0, 120);
@@ -172,39 +271,7 @@ export const detectItems = createServerFn({ method: "POST" })
       "Du bist ein Fashion-Assistent. Erkenne auf dem Foto Bekleidung UND Schuhe: Oberteile (Shirt, Pulli, Jacke, Blazer), Unterteile (Hose, Rock, Shorts), Kleider sowie jegliches Schuhwerk (Sneaker, Sandalen, Stiefel, Absatzschuhe, Ballerinas, Loafer, Hausschuhe usw.). WICHTIGSTE REGEL bei Fotos, auf denen eine Person ein Outfit trägt: Zerlege das Outfit IMMER in seine einzelnen Kleidungsstücke und melde JEDES Teil (jedes Oberteil, jedes Unterteil, jede Jacke/jeder Blazer, das Schuhpaar usw.) als EIGENEN Eintrag mit einer eigenen, eng um genau dieses eine Teil gezogenen Box. Melde NIEMALS das ganze getragene Outfit oder mehrere Kleidungsstücke zusammen als EIN Teil mit einer Box über die gesamte Person — auch wenn nur eine Person mit einem einzigen Outfit zu sehen ist (z. B. T-Shirt + Hose → zwei getrennte Einträge: einer nur um den Oberkörper/das Shirt, einer nur um die Beine/die Hose). Diese Aufteilung gilt genauso für Kleiderstangen, Schuhregale oder Gruppenfotos mehrerer Teile. Beispiel: Eine Person trägt Hose, T-Shirt, eine dünne offene Jacke und Schuhe, dazu Ohrringe → das sind GENAU 4 Einträge (Hose, T-Shirt, Jacke, Schuhpaar), die Ohrringe werden NICHT gemeldet. Zähle daher zuerst für dich selbst, wie viele einzelne Kleidungsstücke und Schuhe insgesamt sichtbar sind, und gib danach genau so viele Einträge zurück. Melde ein Schuhpaar als EIN Teil mit einer Box, die beide Schuhe umfasst — nicht als zwei einzelne Teile. STRIKT AUSGESCHLOSSEN und niemals melden: Socken/Strümpfe, Haarbänder und Haaraccessoires, Schmuck, Uhren, Sonnenbrillen, Mützen/Hüte, Schals, Gürtel, Taschen, Handy, Möbel, Hintergrund, Person, Haut, Haare. Wenn du unsicher bist, ob ein Objekt Bekleidung oder Schuhwerk ist: lieber weglassen. Melde ALLE einzeln erkannten Teile, auch wenn es viele sind (z. B. bei einer vollen Kleiderstange oder einem Schuhregal) – wähle keine Teilmenge aus. Halte die Antwort extrem knapp. Antworte AUSSCHLIESSLICH mit JSON: {\"items\":[{\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|sport|sonstiges\",\"name\":\"kurzer deutscher Name (max 3 Wörter)\",\"color\":\"präzise Farbe deutsch, z.B. 'Cremeweiß', 'Dunkelblau', 'Camel'\",\"description\":\"max 5 Wörter Position, z.B. 'Pulli oben'\",\"box\":{\"x\":0.0,\"y\":0.0,\"w\":0.0,\"h\":0.0},\"confidence\":0.0,\"matchId\":null}]}. box ist die normalisierte Bounding-Box (0–1, x/y = linke obere Ecke) des Teils im Bild, möglichst eng um das Teil (bei Schuhen: eng um das ganze Paar). confidence ist eine ehrliche Selbsteinschätzung zwischen 0 und 1, wie sicher du dir bei Art/Kategorie/Schnitt dieses Teils bist: >0.8 nur bei eindeutig sichtbaren, klar abgegrenzten Teilen. Vergib bewusst NIEDRIGE Werte (<0.65) statt zu raten bei: um Hals oder Taille gebundenen/geknoteten Teilen, stark überlappenden oder geschichteten Kleidungsstücken, nur teilweise sichtbaren oder am Bildrand abgeschnittenen Teilen, Teilen, von denen im Foto nur ein schmaler, wenig aussagekräftiger Ausschnitt sichtbar ist (z. B. eng an eng hängende Kleidungsstücke auf einer Kleiderstange), sowie wenn Kategorie oder Schnitt nicht eindeutig sind (z. B. Cardigan vs. Rollkragenpullover). Wenn ein unteres Teil (Hose, Rock, Kleid) von einem längeren, offen getragenen Oberteil/Jacke/Hemd teilweise verdeckt ist: die Bounding-Box darf NUR den tatsächlich sichtbaren Bereich dieses unteren Teils umfassen, niemals den verdeckten Teil ergänzen oder die Box größer ziehen als sichtbar. Setze in solchen Fällen die confidence bewusst niedrig (<0.65), damit die Nutzerin korrigieren kann. Melde jedes Teil trotzdem — auch mit niedriger confidence. Kein Fließtext, kein Markdown." +
       existingBlock;
 
-    /** Ein Erkennungs-Aufruf: liefert die rohe items-Liste, oder einen Fehlergrund bei HTTP-/Parse-Fehler. */
-    async function askGemini(
-      systemPrompt: string,
-      userText: string,
-    ): Promise<{ list: any[] } | { error: string }> {
-      let res: Response;
-      try {
-        res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: [
-              { role: "system", content: systemPrompt },
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: userText },
-                  { type: "image_url", image_url: { url: data.imageDataUrl } },
-                ],
-              },
-            ],
-          }),
-        });
-      } catch (e: any) {
-        return { error: `Netzwerkfehler beim Aufruf der KI: ${e?.message ?? "unbekannt"}` };
-      }
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        return { error: `KI-Gateway antwortete mit ${res.status}${body ? `: ${body.slice(0, 300)}` : ""}` };
-      }
-      const json = await res.json();
-      const raw: string = json?.choices?.[0]?.message?.content ?? "";
+    function extractJsonItems(raw: string): { list: any[] } | { error: string } {
       // Modell hält sich nicht immer strikt an "nur JSON" — ggf. umgebenden Fließtext abschneiden.
       let cleaned = raw.replace(/```json|```/g, "").trim();
       const first = cleaned.indexOf("{");
@@ -216,6 +283,45 @@ export const detectItems = createServerFn({ method: "POST" })
       } catch {
         return { error: `KI-Antwort war kein gültiges JSON: ${raw.slice(0, 300)}` };
       }
+    }
+
+    /** Ein Erkennungs-Aufruf: liefert die rohe items-Liste, oder einen Fehlergrund bei HTTP-/Parse-Fehler. */
+    async function askGemini(
+      systemPrompt: string,
+      userText: string,
+    ): Promise<{ list: any[] } | { error: string }> {
+      const mime = data.imageDataUrl.slice(5, data.imageDataUrl.indexOf(";")) || "image/jpeg";
+      const b64 = data.imageDataUrl.slice(data.imageDataUrl.indexOf(",") + 1);
+      let res: Response;
+      try {
+        res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents: [
+                {
+                  role: "user",
+                  parts: [{ text: userText }, { inline_data: { mime_type: mime, data: b64 } }],
+                },
+              ],
+            }),
+          },
+        );
+      } catch (e: any) {
+        return { error: `Netzwerkfehler beim Aufruf von Gemini: ${e?.message ?? "unbekannt"}` };
+      }
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        return { error: `Gemini antwortete mit ${res.status}${body ? `: ${body.slice(0, 300)}` : ""}` };
+      }
+      const json = await res.json();
+      const raw: string = (json?.candidates?.[0]?.content?.parts ?? [])
+        .map((p: any) => p.text ?? "")
+        .join("");
+      return extractJsonItems(raw);
     }
 
     const firstCall = await askGemini(
@@ -309,7 +415,7 @@ export const detectItems = createServerFn({ method: "POST" })
 
 /** Korrigiert Name/Kategorie/Farbe anhand einer Nutzerbeschreibung ("falsch erkannt"). */
 export const refineItem = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([...wardrobeAuth])
   .inputValidator((data: { correction?: string; imageDataUrl?: string; name?: string; category?: string; color?: string }) => {
     if (!data?.correction?.trim() && !data?.imageDataUrl?.startsWith("data:image/")) {
       throw new Error("Bitte kurz beschreiben oder ein Bild anhängen");
