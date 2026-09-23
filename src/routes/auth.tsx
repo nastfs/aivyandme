@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { useLanguage } from "@/lib/i18n";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -13,13 +14,14 @@ export const Route = createFileRoute("/auth")({
   }),
   head: () => ({
     meta: [
-      { title: "Anmelden — Aivy & Me" },
-      { name: "description", content: "Melde dich in Aivy & Me an und öffne deinen digitalen Kleiderschrank." },
+      { title: "Sign in — Aivy & Me" },
+      { name: "description", content: "Sign in to Aivy & Me and open your digital wardrobe." },
     ],
   }),
 });
 
 function AuthPage() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const { next } = Route.useSearch();
   const [email, setEmail] = useState("");
@@ -53,13 +55,13 @@ function AuthPage() {
       if (error) {
         throw new Error(
           error.message.toLowerCase().includes("invalid login")
-            ? "E-Mail oder Passwort ist nicht korrekt."
+            ? t("auth.invalidCredentials")
             : error.message,
         );
       }
       goNext();
     } catch (err: any) {
-      const msg = err.message ?? "Etwas ist schiefgelaufen";
+      const msg = err.message ?? t("auth.genericError");
       setError(msg);
       toast.error(msg);
     } finally {
@@ -71,26 +73,24 @@ function AuthPage() {
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
       <div className="mb-10 text-center">
         <h1 className="text-5xl">Aivy &amp; Me</h1>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Dein digitaler Kleiderschrank. Bewusst kombinieren, planen, tragen.
-        </p>
+        <p className="mt-3 text-sm text-muted-foreground">{t("auth.tagline")}</p>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4 rounded-3xl bg-card p-6 shadow-sm">
-        <h2 className="text-2xl">Willkommen zurück</h2>
+        <h2 className="text-2xl">{t("auth.welcome")}</h2>
 
         <div className="space-y-2">
-          <Label htmlFor="email">E-Mail</Label>
+          <Label htmlFor="email">{t("auth.email")}</Label>
           <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="password">Passwort</Label>
+          <Label htmlFor="password">{t("auth.password")}</Label>
           <Input id="password" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
 
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "Bitte warten…" : "Anmelden"}
+          {loading ? t("auth.signingIn") : t("auth.signIn")}
         </Button>
 
         {error && (
@@ -100,7 +100,7 @@ function AuthPage() {
         )}
 
         <p className="w-full text-center text-sm text-muted-foreground">
-          Zugang nur mit Test-Account (MVP-Phase)
+          {t("auth.testAccountOnly")}
         </p>
       </form>
     </div>

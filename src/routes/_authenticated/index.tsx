@@ -8,6 +8,7 @@ import { signedUrlsMap, displayPath } from "@/lib/storage";
 import { categoryLabel } from "@/lib/categories";
 import { suggestOutfit, type Occasion, type ItemScores, type SuggestItem } from "@/lib/suggest-outfit";
 import { composeOutfitMoodboard } from "@/lib/wardrobe.functions";
+import { useLanguage } from "@/lib/i18n";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { format } from "date-fns";
-import { de } from "date-fns/locale";
+import { de, enUS } from "date-fns/locale";
 import {
   Bell,
   Briefcase,
@@ -54,7 +55,7 @@ async function urlToDataUrl(url: string, maxSide = 768): Promise<string> {
   canvas.width = side;
   canvas.height = side;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas nicht verfügbar");
+  if (!ctx) throw new Error("Canvas not available");
   ctx.fillStyle = "#FFFFFF";
   ctx.fillRect(0, 0, side, side);
   ctx.drawImage(bitmap, (side - w) / 2, (side - h) / 2, w, h);
@@ -62,12 +63,12 @@ async function urlToDataUrl(url: string, maxSide = 768): Promise<string> {
   return canvas.toDataURL("image/jpeg", 0.85);
 }
 
-const OCCASIONS: { value: Occasion; label: string; icon: typeof Briefcase }[] = [
-  { value: "buero", label: "Büro", icon: Briefcase },
-  { value: "kundentermin", label: "Kundentermin", icon: Handshake },
-  { value: "homeoffice", label: "Homeoffice", icon: HomeIcon },
-  { value: "sport", label: "Sport", icon: Dumbbell },
-  { value: "frei", label: "Frei", icon: Coffee },
+const OCCASIONS: { value: Occasion; labelKey: string; icon: typeof Briefcase }[] = [
+  { value: "buero", labelKey: "home.occasion.office", icon: Briefcase },
+  { value: "kundentermin", labelKey: "home.occasion.client", icon: Handshake },
+  { value: "homeoffice", labelKey: "home.occasion.homeoffice", icon: HomeIcon },
+  { value: "sport", labelKey: "home.occasion.sport", icon: Dumbbell },
+  { value: "frei", labelKey: "home.occasion.free", icon: Coffee },
 ];
 
 export const Route = createFileRoute("/_authenticated/")({
@@ -75,12 +76,13 @@ export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
     meta: [
       { title: "Home — Aivy & Me" },
-      { name: "description", content: "Dein heutiger Look und dein Kleiderschrank auf einen Blick." },
+      { name: "description", content: "Your look for today and your wardrobe at a glance." },
     ],
   }),
 });
 
 function Home() {
+  const { t, lang } = useLanguage();
   const { user } = Route.useRouteContext();
   const composeMoodboard = useServerFn(composeOutfitMoodboard);
 
@@ -122,7 +124,7 @@ function Home() {
   });
 
   const displayName = data?.profile?.display_name?.trim();
-  const greeting = displayName ? `Guten Tag, ${displayName}` : "Guten Tag";
+  const greeting = displayName ? `${t("home.greeting")}, ${displayName}` : t("home.greeting");
 
   const temp = useCachedTemperature();
   const allItems = (data?.items ?? []) as SuggestItem[];
@@ -178,7 +180,7 @@ function Home() {
       .from("daily_context")
       .upsert({ user_id: user!.id, context_date: today, occasion: o }, { onConflict: "user_id,context_date" });
     setSavingOccasion(false);
-    if (error) toast.error("Konnte nicht gespeichert werden");
+    if (error) toast.error(t("home.savedError"));
   }
 
   const { data: feedback, refetch: refetchFeedback } = useQuery({
@@ -226,10 +228,10 @@ function Home() {
     });
     if (error) {
       setFeedbackSent(false);
-      toast.error("Konnte nicht gespeichert werden");
+      toast.error(t("home.savedError"));
       return;
     }
-    toast.success("Danke, merken wir uns");
+    toast.success(t("home.feedbackSaved"));
     refetchFeedback();
   }
 
@@ -240,7 +242,7 @@ function Home() {
 
   function openAdd() {
     if (pieces.length >= 6) {
-      toast.error("Maximal 6 Teile im Outfit");
+      toast.error(t("home.maxPieces"));
       return;
     }
     setPicker({ mode: "add" });
@@ -317,7 +319,7 @@ function Home() {
       } catch (err: any) {
         if (cancelled || reqId !== moodboardReqId.current) return;
         console.error("[moodboard]", err);
-        toast.error(err?.message ?? "Moodboard konnte nicht erstellt werden");
+        toast.error(err?.message ?? t("home.moodboardFailed"));
         setMoodboardSrc(null);
         // Allow retry on next effect for the same key after a failure
         lastMoodboardKey.current = "";
@@ -355,7 +357,7 @@ function Home() {
 
       {showOccasionPicker && (
         <section className="mb-8">
-          <h2 className="mb-3 text-xl">Was steht heute an?</h2>
+          <h2 className="mb-3 text-xl">{t("home.whatsToday")}</h2>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {OCCASIONS.map((o) => {
               const Icon = o.icon;
@@ -371,7 +373,7 @@ function Home() {
                   }`}
                 >
                   <Icon className="h-4 w-4" strokeWidth={1.5} />
-                  {o.label}
+                  {t(o.labelKey)}
                 </button>
               );
             })}
@@ -382,9 +384,9 @@ function Home() {
       {showSuggestion && (
       <section className="mb-8">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xl">Dein Outfit für heute</h2>
+          <h2 className="text-xl">{t("home.outfitToday")}</h2>
           <span className="text-xs text-muted-foreground">
-            {format(new Date(), "EEEE, d. MMMM", { locale: de })}
+            {format(new Date(), "EEEE, d. MMMM", { locale: lang === "de" ? de : enUS })}
           </span>
         </div>
 
@@ -398,12 +400,12 @@ function Home() {
                 {moodboardLoading || !moodboardSrc ? (
                   <div className="flex aspect-[4/5] flex-col items-center justify-center gap-2 bg-secondary text-sm text-muted-foreground">
                     <Loader2 className="h-6 w-6 animate-spin" strokeWidth={1.5} />
-                    Moodboard wird erstellt…
+                    {t("home.moodboardCreating")}
                   </div>
                 ) : (
                   <img
                     src={moodboardSrc}
-                    alt="Outfit-Moodboard für heute"
+                    alt={t("home.moodboardAlt")}
                     className="aspect-[4/5] w-full bg-white object-contain"
                   />
                 )}
@@ -416,13 +418,13 @@ function Home() {
                     <button
                       type="button"
                       onClick={() => openReplace(idx)}
-                      title="Teil austauschen"
+                      title={t("home.swapPiece")}
                       className="aspect-square w-full overflow-hidden rounded-2xl bg-white transition hover:opacity-90"
                     >
                       {data?.urls[displayPath(it)] && (
                         <img
                           src={data.urls[displayPath(it)]}
-                          alt={it.name ?? categoryLabel(it.category)}
+                          alt={it.name ?? categoryLabel(it.category, lang)}
                           className="h-full w-full object-contain"
                         />
                       )}
@@ -430,8 +432,8 @@ function Home() {
                     <button
                       type="button"
                       onClick={() => openReplace(idx)}
-                      title="Teil tauschen"
-                      aria-label="Teil tauschen"
+                      title={t("home.swapPiece")}
+                      aria-label={t("home.swapPiece")}
                       className="absolute left-1 top-1 rounded-full bg-background/90 p-1.5 text-muted-foreground shadow-sm opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-secondary"
                     >
                       <ArrowLeftRight className="h-3.5 w-3.5" strokeWidth={1.5} />
@@ -439,15 +441,15 @@ function Home() {
                     <button
                       type="button"
                       onClick={() => removePiece(idx)}
-                      title="Teil entfernen"
-                      aria-label="Teil entfernen"
+                      title={t("home.removePiece")}
+                      aria-label={t("home.removePiece")}
                       className="absolute right-1 top-1 rounded-full bg-background/90 p-1.5 text-muted-foreground shadow-sm opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-secondary hover:text-destructive"
                     >
                       <Trash2 className="h-3.5 w-3.5" strokeWidth={1.5} />
                     </button>
                   </div>
                   <p className="mt-1 truncate text-center text-xs">
-                    {it.name || categoryLabel(it.category)}
+                    {it.name || categoryLabel(it.category, lang)}
                   </p>
                 </div>
               ))}
@@ -456,13 +458,13 @@ function Home() {
                   <button
                     type="button"
                     onClick={openAdd}
-                    title="Teil hinzufügen"
-                    aria-label="Teil hinzufügen"
+                    title={t("home.addPiece")}
+                    aria-label={t("home.addPiece")}
                     className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-border bg-background text-muted-foreground transition hover:bg-secondary hover:text-foreground"
                   >
                     <Plus className="h-5 w-5" strokeWidth={1.5} />
                   </button>
-                  <p className="mt-1 truncate text-center text-xs text-muted-foreground">Hinzufügen</p>
+                  <p className="mt-1 truncate text-center text-xs text-muted-foreground">{t("home.add")}</p>
                 </div>
               )}
             </div>
@@ -472,7 +474,7 @@ function Home() {
                   onClick={newSuggestion}
                   className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm transition hover:bg-secondary"
                 >
-                  <RefreshCw className="h-4 w-4" strokeWidth={1.5} /> Neu vorschlagen
+                  <RefreshCw className="h-4 w-4" strokeWidth={1.5} /> {t("home.newSuggestion")}
                 </button>
                 <div className="mt-2 flex items-center gap-2">
                   <button
@@ -480,14 +482,14 @@ function Home() {
                     disabled={feedbackSent}
                     className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-secondary disabled:opacity-40"
                   >
-                    <Heart className="h-3.5 w-3.5" strokeWidth={1.5} /> Gefällt mir
+                    <Heart className="h-3.5 w-3.5" strokeWidth={1.5} /> {t("home.like")}
                   </button>
                   <button
                     onClick={() => rate(false)}
                     disabled={feedbackSent}
                     className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-secondary disabled:opacity-40"
                   >
-                    <X className="h-3.5 w-3.5" strokeWidth={1.5} /> Nicht mein Stil
+                    <X className="h-3.5 w-3.5" strokeWidth={1.5} /> {t("home.dislike")}
                   </button>
                 </div>
               </>
@@ -495,7 +497,7 @@ function Home() {
           </div>
         ) : (
           <div className="rounded-3xl bg-card p-5 text-center text-sm text-muted-foreground shadow-sm">
-            Füge ein paar Teile hinzu — dann schlagen wir dir hier täglich ein Outfit vor.
+            {t("home.noItemsHint")}
           </div>
         )}
       </section>
@@ -505,18 +507,16 @@ function Home() {
         <DialogContent className="max-h-[85vh] overflow-hidden rounded-3xl sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {picker?.mode === "add" ? "Teil hinzufügen" : "Teil austauschen"}
+              {picker?.mode === "add" ? t("home.pickerAddTitle") : t("home.pickerReplaceTitle")}
             </DialogTitle>
             <DialogDescription>
               {picker?.mode === "add"
-                ? "Wähle ein zusätzliches Teil aus deinem Kleiderschrank."
+                ? t("home.pickerAddDesc")
                 : replacingItem
-                  ? `Wähle ein anderes Teil aus deinem Kleiderschrank${
-                      pickerCandidates.some((c) => c.category === replacingItem.category)
-                        ? ` (${categoryLabel(replacingItem.category)})`
-                        : ""
-                    }.`
-                  : "Wähle ein Ersatzteil."}
+                  ? pickerCandidates.some((c) => c.category === replacingItem.category)
+                    ? t("home.pickerReplaceDescWithCategory", { category: categoryLabel(replacingItem.category, lang) })
+                    : t("home.pickerReplaceDesc")
+                  : t("home.pickerReplaceFallback")}
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[55vh] overflow-y-auto pr-1">
@@ -533,20 +533,20 @@ function Home() {
                       {data?.urls[displayPath(it)] && (
                         <img
                           src={data.urls[displayPath(it)]}
-                          alt={it.name ?? categoryLabel(it.category)}
+                          alt={it.name ?? categoryLabel(it.category, lang)}
                           className="h-full w-full object-contain"
                         />
                       )}
                     </div>
                     <p className="mt-1 truncate text-xs">
-                      {it.name || categoryLabel(it.category)}
+                      {it.name || categoryLabel(it.category, lang)}
                     </p>
                   </button>
                 ))}
               </div>
             ) : (
               <p className="py-8 text-center text-sm text-muted-foreground">
-                Keine anderen Teile im Kleiderschrank verfügbar.
+                {t("home.noOtherItems")}
               </p>
             )}
           </div>
@@ -558,8 +558,8 @@ function Home() {
           to="/outfits"
           className="mb-8 flex items-center justify-between text-sm text-muted-foreground"
         >
-          <span>Zuletzt: {data.recent[0].name}</span>
-          <span className="text-primary">Alle Outfits ›</span>
+          <span>{t("home.lastOutfit", { name: data.recent[0].name })}</span>
+          <span className="text-primary">{t("home.allOutfits")}</span>
         </Link>
       ) : null}
     </div>
@@ -606,18 +606,19 @@ type SavedLocation = {
   permission?: "granted" | "denied" | "prompt";
 };
 
-function weatherInfo(code: number) {
-  if (code === 0) return { label: "klar", icon: Sun };
-  if ([1, 2].includes(code)) return { label: "leicht bewölkt", icon: CloudSun };
-  if (code === 3) return { label: "bewölkt", icon: Cloud };
-  if ([45, 48].includes(code)) return { label: "neblig", icon: CloudFog };
-  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return { label: "regnerisch", icon: CloudRain };
-  if ([71, 73, 75, 77, 85, 86].includes(code)) return { label: "Schnee", icon: CloudSnow };
-  if ([95, 96, 99].includes(code)) return { label: "Gewitter", icon: CloudLightning };
-  return { label: "bewölkt", icon: Cloud };
+function weatherInfo(code: number, t: (key: string) => string) {
+  if (code === 0) return { label: t("weather.clear"), icon: Sun };
+  if ([1, 2].includes(code)) return { label: t("weather.partlyCloudy"), icon: CloudSun };
+  if (code === 3) return { label: t("weather.cloudy"), icon: Cloud };
+  if ([45, 48].includes(code)) return { label: t("weather.foggy"), icon: CloudFog };
+  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return { label: t("weather.rainy"), icon: CloudRain };
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return { label: t("weather.snow"), icon: CloudSnow };
+  if ([95, 96, 99].includes(code)) return { label: t("weather.thunderstorm"), icon: CloudLightning };
+  return { label: t("weather.cloudy"), icon: Cloud };
 }
 
 function useWeather() {
+  const { t, lang } = useLanguage();
   const [location, setLocation] = useState<SavedLocation | null>(null);
   const [weather, setWeather] = useState<{ temp: number; code: number } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -682,7 +683,7 @@ function useWeather() {
       },
       () => {
         setLoading(false);
-        setError("Standort nicht verfügbar");
+        setError(t("home.locationUnavailable"));
       },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 5 * 60 * 1000 },
     );
@@ -699,7 +700,7 @@ function useWeather() {
       setWeather({ temp: data.current.temperature_2m, code: data.current.weather_code });
       setError(null);
     } catch {
-      setError("Wetter konnte nicht geladen werden");
+      setError(t("home.weatherLoadError"));
     } finally {
       setLoading(false);
     }
@@ -722,7 +723,7 @@ function useWeather() {
     setResults(null);
     try {
       const res = await fetch(
-        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=de&format=json`,
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5&language=${lang}&format=json`,
       );
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -769,6 +770,7 @@ function useWeather() {
 }
 
 function WeatherWidget() {
+  const { t } = useLanguage();
   const {
     location,
     weather,
@@ -785,7 +787,7 @@ function WeatherWidget() {
     requestGeolocation,
   } = useWeather();
 
-  const info = useMemo(() => (weather ? weatherInfo(weather.code) : null), [weather]);
+  const info = useMemo(() => (weather ? weatherInfo(weather.code, t) : null), [weather, t]);
   const Icon = info?.icon ?? Sun;
 
   if (weather) {
@@ -801,7 +803,7 @@ function WeatherWidget() {
         <button
           onClick={() => setShowSearch(true)}
           className="ml-1 shrink-0 rounded-full p-1 hover:bg-secondary"
-          aria-label="Ort ändern"
+          aria-label={t("home.changeLocation")}
         >
           <MapPin className="h-3.5 w-3.5" />
         </button>
@@ -829,7 +831,7 @@ function WeatherWidget() {
     return (
       <div className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-card px-3 py-2 text-sm text-muted-foreground shadow-sm">
         <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
-        <span>Wetter wird geladen…</span>
+        <span>{t("home.weatherLoading")}</span>
       </div>
     );
   }
@@ -841,7 +843,7 @@ function WeatherWidget() {
         className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition hover:bg-secondary"
       >
         <MapPin className="h-3.5 w-3.5" />
-        Ort für Wetter hinzufügen
+        {t("home.addLocation")}
       </button>
       {showSearch && (
         <LocationSearch
@@ -882,6 +884,7 @@ function LocationSearch({
   onLocate: () => void;
   onClose: () => void;
 }) {
+  const { t } = useLanguage();
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -899,14 +902,14 @@ function LocationSearch({
           onKeyDown={(e) => {
             if (e.key === "Enter") onSearch();
           }}
-          placeholder="Stadt oder PLZ"
+          placeholder={t("home.city")}
           className="flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none ring-ring focus:ring-2"
         />
         <button
           onClick={onSearch}
           disabled={searching || !query.trim()}
           className="rounded-xl bg-primary p-2 text-primary-foreground disabled:opacity-50"
-          aria-label="Suchen"
+          aria-label={t("home.search")}
         >
           {searching ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -917,7 +920,7 @@ function LocationSearch({
         <button
           onClick={onClose}
           className="rounded-xl border border-border p-2 text-muted-foreground hover:bg-secondary"
-          aria-label="Schließen"
+          aria-label={t("home.close")}
         >
           <X className="h-4 w-4" />
         </button>
@@ -928,11 +931,11 @@ function LocationSearch({
         className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-border py-2 text-xs text-muted-foreground transition hover:bg-secondary"
       >
         <MapPin className="h-3.5 w-3.5" />
-        Aktuellen Standort verwenden
+        {t("home.useCurrentLocation")}
       </button>
 
       {results && results.length === 0 && (
-        <p className="mt-3 text-center text-xs text-muted-foreground">Keinen Ort gefunden.</p>
+        <p className="mt-3 text-center text-xs text-muted-foreground">{t("home.noLocationFound")}</p>
       )}
       {results && results.length > 0 && (
         <div className="mt-2 flex flex-col gap-1">

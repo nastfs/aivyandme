@@ -10,13 +10,13 @@ export const smoothItemImage = createServerFn({ method: "POST" })
   .middleware([...wardrobeAuth])
   .inputValidator((data: { imageDataUrl: string; focus?: string; category?: string; view?: "top" | "side"; correction?: string }) => {
     if (!data?.imageDataUrl?.startsWith("data:image/")) {
-      throw new Error("imageDataUrl muss eine Data-URL sein");
+      throw new Error("imageDataUrl must be a data URL");
     }
     return data;
   })
   .handler(async ({ data }) => {
     const apiKey = process.env.GOOGLE_API_KEY;
-    if (!apiKey) throw new Error("KI ist gerade nicht verfügbar (kein API-Key konfiguriert)");
+    if (!apiKey) throw new Error("AI is currently unavailable (no API key configured)");
 
     const personRule =
       " Falls eine Person das Teil trägt: extrahiere nur das Kleidungsstück selbst und entferne Person, Haut, Haare und Körperteile vollständig; ergänze verdeckte Bereiche plausibel, ohne Schnitt, Farbe oder Muster zu verändern.";
@@ -61,12 +61,12 @@ export const smoothItemImage = createServerFn({ method: "POST" })
     );
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`Bildbearbeitung fehlgeschlagen (${res.status})${body ? `: ${body.slice(0, 300)}` : ""}`);
+      throw new Error(`Image processing failed (${res.status})${body ? `: ${body.slice(0, 300)}` : ""}`);
     }
     const json = await res.json();
     const parts = json?.candidates?.[0]?.content?.parts ?? [];
     const imgPart = parts.find((p: any) => p.inlineData);
-    if (!imgPart) throw new Error("Kein Bild erhalten");
+    if (!imgPart) throw new Error("No image received");
     return { b64: imgPart.inlineData.data as string };
   });
 
@@ -80,18 +80,18 @@ export const composeOutfitMoodboard = createServerFn({ method: "POST" })
   .middleware([...wardrobeAuth])
   .inputValidator((data: { items: MoodboardItemInput[] }) => {
     if (!Array.isArray(data?.items) || data.items.length < 2 || data.items.length > 6) {
-      throw new Error("Moodboard braucht 2–6 Teile");
+      throw new Error("Moodboard needs 2–6 items");
     }
     for (const item of data.items) {
       if (!item?.imageDataUrl?.startsWith("data:image/")) {
-        throw new Error("imageDataUrl muss eine Data-URL sein");
+        throw new Error("imageDataUrl must be a data URL");
       }
     }
     return data;
   })
   .handler(async ({ data }) => {
     const apiKey = process.env.GOOGLE_API_KEY;
-    if (!apiKey) throw new Error("KI ist gerade nicht verfügbar (kein API-Key konfiguriert)");
+    if (!apiKey) throw new Error("AI is currently unavailable (no API key configured)");
 
     const clothingCats = new Set(["oberteile", "hosen", "kleider", "blazer", "roecke", "sport"]);
     const layoutOrder = [
@@ -162,7 +162,7 @@ export const composeOutfitMoodboard = createServerFn({ method: "POST" })
     );
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`Moodboard fehlgeschlagen (${res.status})${body ? `: ${body.slice(0, 300)}` : ""}`);
+      throw new Error(`Moodboard failed (${res.status})${body ? `: ${body.slice(0, 300)}` : ""}`);
     }
     const json = await res.json();
     const parts = json?.candidates?.[0]?.content?.parts ?? [];
@@ -170,7 +170,7 @@ export const composeOutfitMoodboard = createServerFn({ method: "POST" })
     const b64 = imgPart?.inlineData?.data ?? imgPart?.inline_data?.data;
     if (!b64) {
       const reason = json?.candidates?.[0]?.finishReason ?? json?.error?.message ?? "unbekannt";
-      throw new Error(`Kein Moodboard-Bild erhalten (${reason})`);
+      throw new Error(`No moodboard image received (${reason})`);
     }
     return { b64: b64 as string };
   });
@@ -179,7 +179,7 @@ export const classifyItem = createServerFn({ method: "POST" })
   .middleware([...wardrobeAuth])
   .inputValidator((data: { imageDataUrl: string }) => {
     if (!data?.imageDataUrl?.startsWith("data:image/")) {
-      throw new Error("imageDataUrl muss eine Data-URL sein");
+      throw new Error("imageDataUrl must be a data URL");
     }
     return data;
   })
@@ -201,7 +201,7 @@ export const classifyItem = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "Du bist ein Fashion-Assistent. Analysiere das Foto eines Kleidungsstücks und antworte AUSSCHLIESSLICH mit einem JSON-Objekt im Format {\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|taschen|sport|sonstiges\",\"name\":\"kurzer deutscher Name, z.B. 'Weißes T-Shirt'\",\"color\":\"Hauptfarbe deutsch, z.B. 'Beige'\"}. Kein Fließtext, kein Markdown.",
+              "Du bist ein Fashion-Assistent. Analysiere das Foto eines Kleidungsstücks und antworte AUSSCHLIESSLICH mit einem JSON-Objekt im Format {\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|taschen|sport|sonstiges\",\"name\":\"short English name, e.g. 'White T-Shirt'\",\"color\":\"main color in English, e.g. 'Beige'\"}. Kein Fließtext, kein Markdown.",
           },
           {
             role: "user",
@@ -254,13 +254,13 @@ export const detectItems = createServerFn({ method: "POST" })
   .middleware([...wardrobeAuth])
   .inputValidator((data: { imageDataUrl: string; existing?: ExistingItem[] }) => {
     if (!data?.imageDataUrl?.startsWith("data:image/")) {
-      throw new Error("imageDataUrl muss eine Data-URL sein");
+      throw new Error("imageDataUrl must be a data URL");
     }
     return data;
   })
   .handler(async ({ data }): Promise<{ items: DetectedItem[] }> => {
     const apiKey = process.env.GOOGLE_API_KEY;
-    if (!apiKey) throw new Error("KI ist aktuell nicht verfügbar (kein API-Key konfiguriert)");
+    if (!apiKey) throw new Error("AI is currently unavailable (no API key configured)");
 
     const existing = (data.existing ?? []).slice(0, 120);
     const existingBlock = existing.length
@@ -268,7 +268,7 @@ export const detectItems = createServerFn({ method: "POST" })
       : "";
 
     const basePrompt =
-      "Du bist ein Fashion-Assistent. Erkenne auf dem Foto Bekleidung UND Schuhe: Oberteile (Shirt, Pulli, Jacke, Blazer), Unterteile (Hose, Rock, Shorts), Kleider sowie jegliches Schuhwerk (Sneaker, Sandalen, Stiefel, Absatzschuhe, Ballerinas, Loafer, Hausschuhe usw.). WICHTIGSTE REGEL bei Fotos, auf denen eine Person ein Outfit trägt: Zerlege das Outfit IMMER in seine einzelnen Kleidungsstücke und melde JEDES Teil (jedes Oberteil, jedes Unterteil, jede Jacke/jeder Blazer, das Schuhpaar usw.) als EIGENEN Eintrag mit einer eigenen, eng um genau dieses eine Teil gezogenen Box. Melde NIEMALS das ganze getragene Outfit oder mehrere Kleidungsstücke zusammen als EIN Teil mit einer Box über die gesamte Person — auch wenn nur eine Person mit einem einzigen Outfit zu sehen ist (z. B. T-Shirt + Hose → zwei getrennte Einträge: einer nur um den Oberkörper/das Shirt, einer nur um die Beine/die Hose). Diese Aufteilung gilt genauso für Kleiderstangen, Schuhregale oder Gruppenfotos mehrerer Teile. Beispiel: Eine Person trägt Hose, T-Shirt, eine dünne offene Jacke und Schuhe, dazu Ohrringe → das sind GENAU 4 Einträge (Hose, T-Shirt, Jacke, Schuhpaar), die Ohrringe werden NICHT gemeldet. Zähle daher zuerst für dich selbst, wie viele einzelne Kleidungsstücke und Schuhe insgesamt sichtbar sind, und gib danach genau so viele Einträge zurück. Melde ein Schuhpaar als EIN Teil mit einer Box, die beide Schuhe umfasst — nicht als zwei einzelne Teile. STRIKT AUSGESCHLOSSEN und niemals melden: Socken/Strümpfe, Haarbänder und Haaraccessoires, Schmuck, Uhren, Sonnenbrillen, Mützen/Hüte, Schals, Gürtel, Taschen, Handy, Möbel, Hintergrund, Person, Haut, Haare. Wenn du unsicher bist, ob ein Objekt Bekleidung oder Schuhwerk ist: lieber weglassen. Melde ALLE einzeln erkannten Teile, auch wenn es viele sind (z. B. bei einer vollen Kleiderstange oder einem Schuhregal) – wähle keine Teilmenge aus. Halte die Antwort extrem knapp. Antworte AUSSCHLIESSLICH mit JSON: {\"items\":[{\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|sport|sonstiges\",\"name\":\"kurzer deutscher Name (max 3 Wörter)\",\"color\":\"präzise Farbe deutsch, z.B. 'Cremeweiß', 'Dunkelblau', 'Camel'\",\"description\":\"max 5 Wörter Position, z.B. 'Pulli oben'\",\"box\":{\"x\":0.0,\"y\":0.0,\"w\":0.0,\"h\":0.0},\"confidence\":0.0,\"matchId\":null}]}. box ist die normalisierte Bounding-Box (0–1, x/y = linke obere Ecke) des Teils im Bild, möglichst eng um das Teil (bei Schuhen: eng um das ganze Paar). confidence ist eine ehrliche Selbsteinschätzung zwischen 0 und 1, wie sicher du dir bei Art/Kategorie/Schnitt dieses Teils bist: >0.8 nur bei eindeutig sichtbaren, klar abgegrenzten Teilen. Vergib bewusst NIEDRIGE Werte (<0.65) statt zu raten bei: um Hals oder Taille gebundenen/geknoteten Teilen, stark überlappenden oder geschichteten Kleidungsstücken, nur teilweise sichtbaren oder am Bildrand abgeschnittenen Teilen, Teilen, von denen im Foto nur ein schmaler, wenig aussagekräftiger Ausschnitt sichtbar ist (z. B. eng an eng hängende Kleidungsstücke auf einer Kleiderstange), sowie wenn Kategorie oder Schnitt nicht eindeutig sind (z. B. Cardigan vs. Rollkragenpullover). Wenn ein unteres Teil (Hose, Rock, Kleid) von einem längeren, offen getragenen Oberteil/Jacke/Hemd teilweise verdeckt ist: die Bounding-Box darf NUR den tatsächlich sichtbaren Bereich dieses unteren Teils umfassen, niemals den verdeckten Teil ergänzen oder die Box größer ziehen als sichtbar. Setze in solchen Fällen die confidence bewusst niedrig (<0.65), damit die Nutzerin korrigieren kann. Melde jedes Teil trotzdem — auch mit niedriger confidence. Kein Fließtext, kein Markdown." +
+      "Du bist ein Fashion-Assistent. Erkenne auf dem Foto Bekleidung UND Schuhe: Oberteile (Shirt, Pulli, Jacke, Blazer), Unterteile (Hose, Rock, Shorts), Kleider sowie jegliches Schuhwerk (Sneaker, Sandalen, Stiefel, Absatzschuhe, Ballerinas, Loafer, Hausschuhe usw.). WICHTIGSTE REGEL bei Fotos, auf denen eine Person ein Outfit trägt: Zerlege das Outfit IMMER in seine einzelnen Kleidungsstücke und melde JEDES Teil (jedes Oberteil, jedes Unterteil, jede Jacke/jeder Blazer, das Schuhpaar usw.) als EIGENEN Eintrag mit einer eigenen, eng um genau dieses eine Teil gezogenen Box. Melde NIEMALS das ganze getragene Outfit oder mehrere Kleidungsstücke zusammen als EIN Teil mit einer Box über die gesamte Person — auch wenn nur eine Person mit einem einzigen Outfit zu sehen ist (z. B. T-Shirt + Hose → zwei getrennte Einträge: einer nur um den Oberkörper/das Shirt, einer nur um die Beine/die Hose). Diese Aufteilung gilt genauso für Kleiderstangen, Schuhregale oder Gruppenfotos mehrerer Teile. Beispiel: Eine Person trägt Hose, T-Shirt, eine dünne offene Jacke und Schuhe, dazu Ohrringe → das sind GENAU 4 Einträge (Hose, T-Shirt, Jacke, Schuhpaar), die Ohrringe werden NICHT gemeldet. Zähle daher zuerst für dich selbst, wie viele einzelne Kleidungsstücke und Schuhe insgesamt sichtbar sind, und gib danach genau so viele Einträge zurück. Melde ein Schuhpaar als EIN Teil mit einer Box, die beide Schuhe umfasst — nicht als zwei einzelne Teile. STRIKT AUSGESCHLOSSEN und niemals melden: Socken/Strümpfe, Haarbänder und Haaraccessoires, Schmuck, Uhren, Sonnenbrillen, Mützen/Hüte, Schals, Gürtel, Taschen, Handy, Möbel, Hintergrund, Person, Haut, Haare. Wenn du unsicher bist, ob ein Objekt Bekleidung oder Schuhwerk ist: lieber weglassen. Melde ALLE einzeln erkannten Teile, auch wenn es viele sind (z. B. bei einer vollen Kleiderstange oder einem Schuhregal) – wähle keine Teilmenge aus. Halte die Antwort extrem knapp. Antworte AUSSCHLIESSLICH mit JSON: {\"items\":[{\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|sport|sonstiges\",\"name\":\"short English name (max 3 words)\",\"color\":\"precise color in English, e.g. 'Cream White', 'Navy Blue', 'Camel'\",\"description\":\"max 5 words position, e.g. 'Sweater top'\",\"box\":{\"x\":0.0,\"y\":0.0,\"w\":0.0,\"h\":0.0},\"confidence\":0.0,\"matchId\":null}]}. box ist die normalisierte Bounding-Box (0–1, x/y = linke obere Ecke) des Teils im Bild, möglichst eng um das Teil (bei Schuhen: eng um das ganze Paar). confidence ist eine ehrliche Selbsteinschätzung zwischen 0 und 1, wie sicher du dir bei Art/Kategorie/Schnitt dieses Teils bist: >0.8 nur bei eindeutig sichtbaren, klar abgegrenzten Teilen. Vergib bewusst NIEDRIGE Werte (<0.65) statt zu raten bei: um Hals oder Taille gebundenen/geknoteten Teilen, stark überlappenden oder geschichteten Kleidungsstücken, nur teilweise sichtbaren oder am Bildrand abgeschnittenen Teilen, Teilen, von denen im Foto nur ein schmaler, wenig aussagekräftiger Ausschnitt sichtbar ist (z. B. eng an eng hängende Kleidungsstücke auf einer Kleiderstange), sowie wenn Kategorie oder Schnitt nicht eindeutig sind (z. B. Cardigan vs. Rollkragenpullover). Wenn ein unteres Teil (Hose, Rock, Kleid) von einem längeren, offen getragenen Oberteil/Jacke/Hemd teilweise verdeckt ist: die Bounding-Box darf NUR den tatsächlich sichtbaren Bereich dieses unteren Teils umfassen, niemals den verdeckten Teil ergänzen oder die Box größer ziehen als sichtbar. Setze in solchen Fällen die confidence bewusst niedrig (<0.65), damit die Nutzerin korrigieren kann. Melde jedes Teil trotzdem — auch mit niedriger confidence. Kein Fließtext, kein Markdown." +
       existingBlock;
 
     function extractJsonItems(raw: string): { list: any[] } | { error: string } {
@@ -330,7 +330,7 @@ export const detectItems = createServerFn({ method: "POST" })
     );
     if ("error" in firstCall) {
       console.error("[detectItems] Erkennung fehlgeschlagen:", firstCall.error);
-      throw new Error(`Automatische Erkennung fehlgeschlagen: ${firstCall.error}`);
+      throw new Error(`Automatic detection failed: ${firstCall.error}`);
     }
     let list = firstCall.list;
 
@@ -409,7 +409,7 @@ export const detectItems = createServerFn({ method: "POST" })
       return { items };
     } catch (e: any) {
       console.error("[detectItems] Verarbeitung der KI-Antwort fehlgeschlagen:", e);
-      throw new Error("Antwort der KI konnte nicht verarbeitet werden");
+      throw new Error("AI response could not be processed");
     }
   });
 
@@ -418,7 +418,7 @@ export const refineItem = createServerFn({ method: "POST" })
   .middleware([...wardrobeAuth])
   .inputValidator((data: { correction?: string; imageDataUrl?: string; name?: string; category?: string; color?: string }) => {
     if (!data?.correction?.trim() && !data?.imageDataUrl?.startsWith("data:image/")) {
-      throw new Error("Bitte kurz beschreiben oder ein Bild anhängen");
+      throw new Error("Please briefly describe or attach an image");
     }
     return data;
   })
@@ -452,7 +452,7 @@ export const refineItem = createServerFn({ method: "POST" })
           {
             role: "system",
             content:
-              "Du bist ein Fashion-Assistent. Die Nutzerin korrigiert eine falsche Erkennung. Antworte AUSSCHLIESSLICH mit JSON: {\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|taschen|accessoires|sport|sonstiges\",\"name\":\"kurzer deutscher Name\",\"color\":\"Hauptfarbe deutsch\"}. Kein Markdown.",
+              "Du bist ein Fashion-Assistent. Die Nutzerin korrigiert eine falsche Erkennung. Antworte AUSSCHLIESSLICH mit JSON: {\"category\":\"oberteile|hosen|kleider|blazer|roecke|schuhe|taschen|accessoires|sport|sonstiges\",\"name\":\"short English name\",\"color\":\"main color in English\"}. No markdown.",
           },
           { role: "user", content: userContent },
         ],

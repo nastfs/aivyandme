@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { addDays, format, isSameDay, startOfWeek } from "date-fns";
-import { de } from "date-fns/locale";
+import { de, enUS } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { signedUrlsMap, displayPath } from "@/lib/storage";
 import { Plus, Trash2, CalendarDays } from "lucide-react";
@@ -11,18 +11,21 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useLanguage } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_authenticated/outfits/")({
   component: Outfits,
   head: () => ({
     meta: [
       { title: "Outfits — Aivy & Me" },
-      { name: "description", content: "Deine Looks. Geplant, gespeichert und immer passend." },
+      { name: "description", content: "Your looks. Planned, saved, and always fitting." },
     ],
   }),
 });
 
 function Outfits() {
+  const { t, lang } = useLanguage();
+  const dateLocale = lang === "de" ? de : enUS;
   const qc = useQueryClient();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
@@ -64,7 +67,7 @@ function Outfits() {
   async function removePlan(id: string) {
     const { error } = await supabase.from("outfit_plans").delete().eq("id", id);
     if (error) return toast.error(error.message);
-    toast.success("Planung entfernt");
+    toast.success(t("outfits.planRemoved"));
     qc.invalidateQueries({ queryKey: ["outfits-page"] });
     qc.invalidateQueries({ queryKey: ["home"] });
   }
@@ -73,10 +76,8 @@ function Outfits() {
     <div className="px-6 pt-10">
       <header className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-4xl">Outfits</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Deine Looks. Geplant, gespeichert und immer passend.
-          </p>
+          <h1 className="text-4xl">{t("outfits.title")}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{t("outfits.tagline")}</p>
         </div>
         <Link to="/outfits/new" className="rounded-full bg-primary p-2 text-primary-foreground">
           <Plus className="h-5 w-5" />
@@ -85,11 +86,11 @@ function Outfits() {
 
       <section className="mb-8">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-xl">Diese Woche</h2>
+          <h2 className="text-xl">{t("outfits.thisWeek")}</h2>
           <Popover>
             <PopoverTrigger asChild>
               <button className="flex items-center gap-1 text-sm text-primary">
-                <CalendarDays className="h-4 w-4" /> Kalender
+                <CalendarDays className="h-4 w-4" /> {t("outfits.calendar")}
               </button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-auto p-0">
@@ -118,7 +119,7 @@ function Outfits() {
                   isSelected ? "border-primary bg-card shadow-sm" : "border-transparent bg-card",
                 )}
               >
-                <div className="text-xs text-muted-foreground">{format(d, "EEE", { locale: de })}</div>
+                <div className="text-xs text-muted-foreground">{format(d, "EEE", { locale: dateLocale })}</div>
                 <div className="text-lg font-medium">{format(d, "d")}</div>
                 <div className="aspect-square w-full overflow-hidden rounded-xl bg-secondary">
                   {plan ? (
@@ -145,7 +146,7 @@ function Outfits() {
         <div className="mt-4 rounded-3xl bg-card p-4 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-medium">
-              {format(selectedDate, "EEEE, d. MMMM", { locale: de })}
+              {format(selectedDate, "EEEE, d. MMMM", { locale: dateLocale })}
             </p>
             {selectedPlan && (
               <button onClick={() => removePlan(selectedPlan.id)} className="text-muted-foreground">
@@ -157,9 +158,9 @@ function Outfits() {
             <p className="text-lg">{selectedPlan.outfits?.name}</p>
           ) : (
             <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">Noch kein Outfit geplant.</p>
+              <p className="text-sm text-muted-foreground">{t("outfits.noPlanYet")}</p>
               <Link to="/outfits/new" search={{ date: selectedKey }}>
-                <Button size="sm" variant="secondary">Planen</Button>
+                <Button size="sm" variant="secondary">{t("outfits.plan")}</Button>
               </Link>
             </div>
           )}
@@ -167,7 +168,7 @@ function Outfits() {
       </section>
 
       <section className="pb-8">
-        <h2 className="mb-3 text-xl">Deine gespeicherten Looks</h2>
+        <h2 className="mb-3 text-xl">{t("outfits.savedLooks")}</h2>
         {data?.outfits?.length ? (
           <div className="grid grid-cols-2 gap-3">
             {data.outfits.map((o: any) => (
@@ -182,17 +183,15 @@ function Outfits() {
                   ))}
                 </div>
                 <p className="mt-2 truncate text-sm font-medium">{o.name}</p>
-                <p className="text-xs text-muted-foreground">{o.outfit_items?.length ?? 0} Teile</p>
+                <p className="text-xs text-muted-foreground">{t("outfits.itemsCount", { count: o.outfit_items?.length ?? 0 })}</p>
               </div>
             ))}
           </div>
         ) : (
           <div className="rounded-3xl bg-card p-6 text-center shadow-sm">
-            <p className="text-sm text-muted-foreground">
-              Noch keine Outfits. Stelle deinen ersten Look aus deinen Teilen zusammen.
-            </p>
+            <p className="text-sm text-muted-foreground">{t("outfits.noOutfitsYet")}</p>
             <Link to="/outfits/new" className="mt-4 inline-flex rounded-full bg-primary px-5 py-2 text-sm text-primary-foreground">
-              Neuen Look erstellen
+              {t("outfits.createNewLook")}
             </Link>
           </div>
         )}

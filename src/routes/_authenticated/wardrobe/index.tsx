@@ -10,18 +10,20 @@ import { CATEGORIES, categoryLabel, type CategoryValue } from "@/lib/categories"
 import { Plus, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_authenticated/wardrobe/")({
   component: Wardrobe,
   head: () => ({
     meta: [
-      { title: "Kleiderschrank — Aivy & Me" },
-      { name: "description", content: "Alle deine Teile, sortiert nach Kategorie." },
+      { title: "Wardrobe — Aivy & Me" },
+      { name: "description", content: "All your items, sorted by category." },
     ],
   }),
 });
 
 function Wardrobe() {
+  const { t, lang } = useLanguage();
   const [active, setActive] = useState<"all" | CategoryValue>("all");
   const qc = useQueryClient();
   const smooth = useServerFn(smoothItemImage);
@@ -67,8 +69,8 @@ function Wardrobe() {
     }
     setNormalizing(false);
     qc.invalidateQueries();
-    if (failed) toast.error(`${failed} Teile konnten nicht angepasst werden`);
-    else toast.success("Alle Bilder sind jetzt im gleichen Format");
+    if (failed) toast.error(t("wardrobe.normalizeFailed", { count: failed }));
+    else toast.success(t("wardrobe.normalizeSuccess"));
   }
 
   const filtered = useMemo(() => {
@@ -86,7 +88,7 @@ function Wardrobe() {
   return (
     <div className="px-6 pt-10">
       <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-4xl">Mein Kleiderschrank</h1>
+        <h1 className="text-4xl">{t("wardrobe.title")}</h1>
         <div className="flex items-center gap-2">
           <Link to="/wardrobe/add" className="rounded-full bg-primary p-2 text-primary-foreground">
             <Plus className="h-5 w-5" />
@@ -98,24 +100,24 @@ function Wardrobe() {
       </header>
 
       <div className="mb-6 flex gap-2 overflow-x-auto pb-2 -mx-6 px-6">
-        <Chip active={active === "all"} onClick={() => setActive("all")} label="Alle" />
+        <Chip active={active === "all"} onClick={() => setActive("all")} label={t("wardrobe.all")} />
         {CATEGORIES.filter((c) => c.value !== "sonstiges").map((c) => (
           <Chip
             key={c.value}
             active={active === c.value}
             onClick={() => setActive(c.value)}
-            label={c.label}
+            label={t(c.labelKey)}
           />
         ))}
       </div>
 
       {(outdated.length > 0 || normalizing) && (
         <div className="mb-5 rounded-3xl bg-card p-4 shadow-sm">
-          <p className="text-sm">Bilder vereinheitlichen</p>
+          <p className="text-sm">{t("wardrobe.normalizeImages")}</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {normalizing
-              ? `${progress.done} von ${progress.total} Teilen angepasst…`
-              : `${outdated.length} Teile haben noch kein Bild im Standard-Format (Schuhe: von oben + Seitenansicht).`}
+              ? t("wardrobe.normalizingProgress", { done: progress.done, total: progress.total })
+              : t("wardrobe.normalizeHint", { count: outdated.length })}
           </p>
           <button
             onClick={normalizeAll}
@@ -123,30 +125,28 @@ function Wardrobe() {
             className="mt-3 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-60"
           >
             <Sparkles className="h-4 w-4" />
-            {normalizing ? "Läuft…" : "Jetzt anpassen"}
+            {normalizing ? t("wardrobe.running") : t("wardrobe.normalizeNow")}
           </button>
         </div>
       )}
 
       {data?.items && data.items.length === 0 ? (
         <div className="mt-16 rounded-3xl bg-card p-8 text-center shadow-sm">
-          <p className="text-lg">Dein Schrank ist noch leer</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Fotografiere dein erstes Teil — die KI kümmert sich um den Rest.
-          </p>
+          <p className="text-lg">{t("wardrobe.noItems")}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{t("wardrobe.noItemsHint")}</p>
           <Link
             to="/wardrobe/add"
             className="mt-6 inline-flex rounded-full bg-primary px-6 py-2.5 text-sm text-primary-foreground"
           >
-            Erstes Teil hinzufügen
+            {t("wardrobe.addFirstItem")}
           </Link>
         </div>
       ) : (
         <>
           <p className="mb-3 text-sm text-muted-foreground">
             {active === "all"
-              ? `${data?.items.length ?? 0} Teile`
-              : `${counts[active] ?? 0} Teile in ${categoryLabel(active)}`}
+              ? t("wardrobe.itemsCount", { count: data?.items.length ?? 0 })
+              : t("wardrobe.itemsCountInCategory", { count: counts[active] ?? 0, category: categoryLabel(active, lang) })}
           </p>
           <div className="grid grid-cols-2 gap-3 pb-8">
             {filtered.map((it) => (
@@ -158,13 +158,13 @@ function Wardrobe() {
               >
                 <div className="aspect-square bg-secondary">
                   {data?.urls[displayPath(it)] && (
-                    <img src={data.urls[displayPath(it)]} alt={it.name ?? ""} className="h-full w-full object-cover" />
+                    <img src={data.urls[displayPath(it)]} alt={it.name ?? ""} className="h-full w-full object-contain" />
                   )}
                 </div>
                 <div className="p-3">
-                  <p className="truncate text-sm font-medium">{it.name || categoryLabel(it.category)}</p>
+                  <p className="truncate text-sm font-medium">{it.name || categoryLabel(it.category, lang)}</p>
                   <p className="text-xs text-muted-foreground">
-                    {categoryLabel(it.category)}{it.color ? ` · ${it.color}` : ""}
+                    {categoryLabel(it.category, lang)}{it.color ? ` · ${it.color}` : ""}
                   </p>
                 </div>
               </Link>

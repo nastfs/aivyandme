@@ -32,7 +32,7 @@ export const Route = createFileRoute("/.lovable/oauth/consent")({
   component: Consent,
   errorComponent: ({ error }) => (
     <main className="mx-auto max-w-md p-6">
-      Diese Autorisierung konnte nicht geladen werden: {String((error as Error)?.message ?? error)}
+      This authorization could not be loaded: {String((error as Error)?.message ?? error)}
     </main>
   ),
 });
@@ -42,7 +42,7 @@ function Consent() {
   const { authorization_id } = Route.useSearch();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const clientName = details?.client?.name ?? "Diese App";
+  const clientName = details?.client?.name ?? "This app";
 
   async function decide(approve: boolean) {
     setBusy(true);
@@ -57,7 +57,7 @@ function Consent() {
     const target = data?.redirect_url ?? data?.redirect_to;
     if (!target) {
       setBusy(false);
-      setError("Der Autorisierungsserver hat keine Weiterleitung zurückgegeben.");
+      setError("The authorization server did not return a redirect.");
       return;
     }
     window.location.href = target;
@@ -66,9 +66,9 @@ function Consent() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
       <div className="space-y-4 rounded-3xl bg-card p-6 shadow-sm">
-        <h1 className="text-3xl">{clientName} mit Aivy &amp; Me verbinden</h1>
+        <h1 className="text-3xl">Connect {clientName} with Aivy &amp; Me</h1>
         <p className="text-sm text-muted-foreground">
-          {clientName} darf danach in deinem Namen auf deinen Kleiderschrank und deine Outfits zugreifen.
+          {clientName} will then be able to access your wardrobe and outfits on your behalf.
         </p>
         {error && (
           <p role="alert" className="text-sm text-destructive">
@@ -77,10 +77,10 @@ function Consent() {
         )}
         <div className="flex gap-3">
           <Button className="flex-1" disabled={busy} onClick={() => decide(true)}>
-            Erlauben
+            Allow
           </Button>
           <Button variant="outline" className="flex-1" disabled={busy} onClick={() => decide(false)}>
-            Ablehnen
+            Deny
           </Button>
         </div>
       </div>

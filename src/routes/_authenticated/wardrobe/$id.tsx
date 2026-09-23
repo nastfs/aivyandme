@@ -12,18 +12,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ChevronLeft, Sparkles, Trash2, Shirt, Check, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { useLanguage } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_authenticated/wardrobe/$id")({
   component: ItemDetail,
   head: () => ({
     meta: [
-      { title: "Teil bearbeiten — Aivy & Me" },
-      { name: "description", content: "Kleidungsstück ansehen, bearbeiten und mit KI glätten." },
+      { title: "Edit Item — Aivy & Me" },
+      { name: "description", content: "View, edit, and smooth a clothing item with AI." },
     ],
   }),
 });
 
 function ItemDetail() {
+  const { t, lang } = useLanguage();
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -83,10 +85,10 @@ function ItemDetail() {
       setInitialColor(color);
       setInitialCategory(category);
       setEditing(false);
-      toast.success("Änderungen gespeichert");
+      toast.success(t("item.changesSaved"));
       qc.invalidateQueries();
     } catch (e: any) {
-      toast.error(e.message ?? "Speichern fehlgeschlagen");
+      toast.error(e.message ?? t("item.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -107,10 +109,10 @@ function ItemDetail() {
   }
 
   async function onDelete() {
-    if (!confirm("Dieses Teil wirklich löschen?")) return;
+    if (!confirm(t("item.confirmDelete"))) return;
     const { error } = await supabase.from("wardrobe_items").delete().eq("id", id);
     if (error) return toast.error(error.message);
-    toast.success("Teil gelöscht");
+    toast.success(t("item.deleted"));
     qc.invalidateQueries();
     navigate({ to: "/wardrobe" });
   }
@@ -130,9 +132,9 @@ function ItemDetail() {
         data: { imageDataUrl: dataUrl, category, view: "top" },
       });
       setPreview(`data:image/png;base64,${b64}`);
-      toast.success("Vorschlag fertig — übernehmen oder verwerfen");
+      toast.success(t("item.previewReady"));
     } catch (e: any) {
-      toast.error("KI-Glättung fehlgeschlagen", { description: e.message });
+      toast.error(t("item.smoothingFailed"), { description: e.message });
     } finally {
       setSmoothing(false);
     }
@@ -146,10 +148,10 @@ function ItemDetail() {
         { id: data.item.id, image_url: data.item.image_url, category },
         smooth as any,
       );
-      toast.success("Bilder ins Standard-Format gebracht");
+      toast.success(t("item.normalizeSuccess"));
       qc.invalidateQueries();
     } catch (e: any) {
-      toast.error("Vereinheitlichen fehlgeschlagen", { description: e.message });
+      toast.error(t("item.normalizeFailed"), { description: e.message });
     } finally {
       setNormalizing(false);
     }
@@ -173,10 +175,10 @@ function ItemDetail() {
         .eq("id", id);
       if (error) throw error;
       setPreview("");
-      toast.success("Neues Bild übernommen");
+      toast.success(t("item.newImageApplied"));
       qc.invalidateQueries();
     } catch (e: any) {
-      toast.error(e.message ?? "Übernehmen fehlgeschlagen");
+      toast.error(e.message ?? t("item.applyFailed"));
     } finally {
       setSaving(false);
     }
@@ -187,7 +189,7 @@ function ItemDetail() {
     const next = !(data.item.use_ai_image !== false);
     const { error } = await supabase.from("wardrobe_items").update({ use_ai_image: next }).eq("id", id);
     if (error) return toast.error(error.message);
-    toast.success(next ? "KI-Bild wird angezeigt" : "Originalbild wird angezeigt");
+    toast.success(next ? t("item.showingAi") : t("item.showingOriginal"));
     qc.invalidateQueries();
   }
 
@@ -197,7 +199,7 @@ function ItemDetail() {
         <Link to="/wardrobe" className="rounded-full border border-border p-2">
           <ChevronLeft className="h-5 w-5" strokeWidth={1.5} />
         </Link>
-        <h1 className="text-xl">Teil bearbeiten</h1>
+        <h1 className="text-xl">{t("item.editTitle")}</h1>
         <button onClick={onDelete} className="rounded-full border border-border p-2 text-muted-foreground">
           <Trash2 className="h-5 w-5" strokeWidth={1.5} />
         </button>
@@ -212,9 +214,9 @@ function ItemDetail() {
           (() => {
             const useAi = data?.item?.use_ai_image !== false;
             const slides = [
-              ...(data?.aiUrl ? [{ url: data.aiUrl, label: "KI-Bild" }] : []),
-              ...(data?.aiUrl2 ? [{ url: data.aiUrl2, label: "KI-Bild · Seitenansicht" }] : []),
-              ...(data?.url ? [{ url: data.url, label: "Originalfoto" }] : []),
+              ...(data?.aiUrl ? [{ url: data.aiUrl, label: t("item.aiImage") }] : []),
+              ...(data?.aiUrl2 ? [{ url: data.aiUrl2, label: t("item.aiImageSideView") }] : []),
+              ...(data?.url ? [{ url: data.url, label: t("item.originalPhoto") }] : []),
             ];
             if (!useAi) slides.reverse();
             const idx = Math.min(slide, Math.max(slides.length - 1, 0));
@@ -252,7 +254,7 @@ function ItemDetail() {
                 )}
                 <p className="mt-2 text-center text-xs text-muted-foreground">
                   {slides[idx]?.label}
-                  {slides.length > 1 ? " · wische für weitere Bilder" : ""}
+                  {slides.length > 1 ? t("item.swipeHint") : ""}
                 </p>
               </>
             );
@@ -274,46 +276,44 @@ function ItemDetail() {
             >
               {data.item.use_ai_image === false && <Check className="h-3.5 w-3.5" />}
             </span>
-            Originalbild behalten
+            {t("item.keepOriginal")}
           </button>
         )}
 
         {preview ? (
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <Button variant="outline" onClick={() => setPreview("")}>Verwerfen</Button>
-            <Button onClick={applyPreview} disabled={saving}>Übernehmen</Button>
+            <Button variant="outline" onClick={() => setPreview("")}>{t("item.discard")}</Button>
+            <Button onClick={applyPreview} disabled={saving}>{t("item.apply")}</Button>
           </div>
         ) : (
           <div className="mt-3 space-y-2">
             <Button variant="outline" className="w-full" onClick={onSmooth} disabled={smoothing || normalizing}>
               <Sparkles className="mr-2 h-4 w-4" />
-              {smoothing ? "KI glättet das Bild…" : data?.aiUrl ? "KI-Bild neu erzeugen" : "Bild mit KI glätten"}
+              {smoothing ? t("item.smoothingInProgress") : data?.aiUrl ? t("item.regenerateAi") : t("item.smoothImage")}
             </Button>
             <Button variant="outline" className="w-full" onClick={onNormalize} disabled={smoothing || normalizing}>
               <Sparkles className="mr-2 h-4 w-4" />
               {normalizing
-                ? "Bilder werden vereinheitlicht…"
+                ? t("item.normalizing")
                 : category === "schuhe"
-                  ? "Ins Standard-Format bringen (oben + Seite)"
-                  : "Ins Standard-Format bringen"}
+                  ? t("item.toStandardFormatShoes")
+                  : t("item.toStandardFormat")}
             </Button>
           </div>
         )}
-        <p className="mt-2 text-center text-xs text-muted-foreground">
-          Glättet Falten vom Halten und säubert den Hintergrund — Farbe, Schnitt und Gebrauchsspuren bleiben erhalten.
-        </p>
+        <p className="mt-2 text-center text-xs text-muted-foreground">{t("item.standardFormatHint")}</p>
       </div>
 
       <div className="space-y-4 rounded-3xl bg-card p-5 shadow-sm">
         {editing ? (
           <>
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
-              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Beiger Blazer" />
+              <Label htmlFor="name">{t("item.name")}</Label>
+              <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("item.namePlaceholder")} />
             </div>
 
             <div className="space-y-2">
-              <Label>Kategorie</Label>
+              <Label>{t("item.category")}</Label>
               <div className="flex flex-wrap gap-2">
                 {CATEGORIES.map((c) => (
                   <button
@@ -322,44 +322,44 @@ function ItemDetail() {
                     onClick={() => setCategory(c.value)}
                     className={`rounded-full border px-3 py-1.5 text-sm ${category === c.value ? "border-primary bg-accent" : "border-border bg-background"}`}
                   >
-                    {c.label}
+                    {t(c.labelKey)}
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="color">Farbe</Label>
-              <Input id="color" value={color} onChange={(e) => setColor(e.target.value)} placeholder="z. B. Beige" />
+              <Label htmlFor="color">{t("item.color2")}</Label>
+              <Input id="color" value={color} onChange={(e) => setColor(e.target.value)} placeholder={t("item.colorPlaceholder")} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <Button variant="outline" onClick={onCancel} disabled={saving}>
-                Abbrechen
+                {t("item.cancel")}
               </Button>
               <Button onClick={onSave} disabled={saving}>
-                {saving ? "Speichern…" : "Speichern"}
+                {saving ? t("item.saving") : t("item.save")}
               </Button>
             </div>
           </>
         ) : (
           <>
             <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Name</p>
-              <p className="text-base font-medium">{name || <span className="text-muted-foreground italic">Unbenannt</span>}</p>
+              <p className="text-sm text-muted-foreground">{t("item.name")}</p>
+              <p className="text-base font-medium">{name || <span className="text-muted-foreground italic">{t("item.unnamed")}</span>}</p>
             </div>
             <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Kategorie</p>
-              <p className="text-base font-medium">{categoryLabel(category)}</p>
+              <p className="text-sm text-muted-foreground">{t("item.category")}</p>
+              <p className="text-base font-medium">{categoryLabel(category, lang)}</p>
             </div>
             <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Farbe</p>
+              <p className="text-sm text-muted-foreground">{t("item.color2")}</p>
               <p className="text-base font-medium">{color || <span className="text-muted-foreground italic">—</span>}</p>
             </div>
 
             <Button variant="outline" className="w-full" onClick={onEdit}>
               <Pencil className="mr-2 h-4 w-4" />
-              Bearbeiten
+              {t("item.edit")}
             </Button>
           </>
         )}
@@ -369,7 +369,7 @@ function ItemDetail() {
           className="flex w-full items-center justify-center gap-2 rounded-full border border-border py-2.5 text-sm"
         >
           <Shirt className="h-4 w-4" strokeWidth={1.5} />
-          In einem Outfit kombinieren
+          {t("item.combineInOutfit")}
         </Link>
       </div>
     </div>

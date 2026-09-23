@@ -1,12 +1,13 @@
 import { useCallback, useState } from "react";
 import Cropper, { type Area } from "react-easy-crop";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/lib/i18n";
 
 const RATIOS = [
-  { label: "Frei (3:4)", value: 3 / 4 },
-  { label: "Quadrat", value: 1 },
-  { label: "Quer", value: 4 / 3 },
-];
+  { key: "cropper.free", value: 3 / 4 },
+  { key: "cropper.square", value: 1 },
+  { key: "cropper.landscape", value: 4 / 3 },
+] as const;
 
 async function cropToDataUrl(src: string, area: Area): Promise<string> {
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -42,6 +43,7 @@ export function ImageCropper({
   onCancel: () => void;
   onDone: (dataUrl: string) => void;
 }) {
+  const { t } = useLanguage();
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [aspect, setAspect] = useState(3 / 4);
@@ -64,9 +66,9 @@ export function ImageCropper({
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
       <div className="flex items-center justify-between px-5 py-4">
         <button onClick={onCancel} className="text-sm text-muted-foreground">
-          Abbrechen
+          {t("cropper.cancel")}
         </button>
-        <p className="text-sm">Ausschnitt wählen</p>
+        <p className="text-sm">{t("cropper.chooseArea")}</p>
         <div className="w-16" />
       </div>
 
@@ -84,9 +86,7 @@ export function ImageCropper({
       </div>
 
       <div className="space-y-4 px-5 pb-8 pt-5">
-        <p className="text-center text-xs text-muted-foreground">
-          Ziehe das Bild und zoome auf das, was eingescannt werden soll.
-        </p>
+        <p className="text-center text-xs text-muted-foreground">{t("cropper.dragZoomHint")}</p>
         <input
           type="range"
           min={1}
@@ -95,28 +95,28 @@ export function ImageCropper({
           value={zoom}
           onChange={(e) => setZoom(Number(e.target.value))}
           className="w-full accent-primary"
-          aria-label="Zoom"
+          aria-label={t("cropper.zoom")}
         />
         <div className="flex justify-center gap-2">
           {RATIOS.map((r) => (
             <button
-              key={r.label}
+              key={r.key}
               type="button"
               onClick={() => setAspect(r.value)}
               className={`rounded-full border px-3 py-1.5 text-xs ${
                 aspect === r.value ? "border-primary bg-accent" : "border-border"
               }`}
             >
-              {r.label}
+              {t(r.key)}
             </button>
           ))}
         </div>
         <div className="grid grid-cols-2 gap-2">
           <Button variant="outline" onClick={() => onDone(src)}>
-            Ohne Zuschnitt
+            {t("cropper.withoutCropping")}
           </Button>
           <Button onClick={apply} disabled={busy || !area}>
-            {busy ? "Zuschneiden…" : "Weiter"}
+            {busy ? t("cropper.cropping") : t("cropper.continue")}
           </Button>
         </div>
       </div>

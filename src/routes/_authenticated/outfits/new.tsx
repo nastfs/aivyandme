@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { X, Check } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/lib/i18n";
 
 const searchSchema = z.object({ date: z.string().optional() });
 
@@ -18,11 +19,12 @@ export const Route = createFileRoute("/_authenticated/outfits/new")({
   validateSearch: (s) => searchSchema.parse(s),
   component: NewOutfit,
   head: () => ({
-    meta: [{ title: "Neuer Look — Aivy & Me" }],
+    meta: [{ title: "New Look — Aivy & Me" }],
   }),
 });
 
 function NewOutfit() {
+  const { t, lang } = useLanguage();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const search = Route.useSearch();
@@ -56,8 +58,8 @@ function NewOutfit() {
   }
 
   async function save() {
-    if (!name.trim()) return toast.error("Gib deinem Look einen Namen");
-    if (selected.size === 0) return toast.error("Wähle mindestens ein Teil");
+    if (!name.trim()) return toast.error(t("outfitNew.nameRequired"));
+    if (selected.size === 0) return toast.error(t("outfitNew.selectAtLeastOne"));
     setSaving(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -77,11 +79,11 @@ function NewOutfit() {
           .upsert({ user_id: uid, outfit_id: outfit.id, planned_date: date }, { onConflict: "user_id,planned_date" });
         if (e3) throw e3;
       }
-      toast.success("Look gespeichert");
+      toast.success(t("outfitNew.saved"));
       qc.invalidateQueries();
       navigate({ to: "/outfits" });
     } catch (e: any) {
-      toast.error(e.message ?? "Speichern fehlgeschlagen");
+      toast.error(e.message ?? t("outfitNew.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -93,34 +95,34 @@ function NewOutfit() {
         <Link to="/outfits" className="rounded-full border border-border p-2">
           <X className="h-5 w-5" strokeWidth={1.5} />
         </Link>
-        <h1 className="text-xl">Neuer Look</h1>
+        <h1 className="text-xl">{t("outfitNew.title")}</h1>
         <div className="w-9" />
       </header>
 
       <div className="mb-4 space-y-3 rounded-3xl bg-card p-4 shadow-sm">
         <div className="space-y-2">
-          <Label htmlFor="name">Name</Label>
-          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Klassisch & souverän" />
+          <Label htmlFor="name">{t("item.name")}</Label>
+          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t("outfitNew.namePlaceholder")} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="date">Für welchen Tag planen? (optional)</Label>
+          <Label htmlFor="date">{t("outfitNew.planDate")}</Label>
           <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </div>
       </div>
 
       <p className="mb-3 text-sm text-muted-foreground">
-        Teile aus deinem Schrank auswählen ({selected.size} gewählt)
+        {t("outfitNew.itemsChosen", { count: selected.size })}
       </p>
 
       {data?.items?.length === 0 ? (
         <div className="rounded-3xl bg-card p-6 text-center text-sm text-muted-foreground shadow-sm">
-          Dein Schrank ist noch leer. Füge zuerst ein Teil hinzu.
+          {t("outfitNew.emptyWardrobe")}
         </div>
       ) : (
         <div className="space-y-6">
           {Object.entries(grouped).map(([cat, items]) => (
             <div key={cat}>
-              <p className="mb-2 text-sm font-medium">{categoryLabel(cat)}</p>
+              <p className="mb-2 text-sm font-medium">{categoryLabel(cat, lang)}</p>
               <div className="grid grid-cols-3 gap-2">
                 {items!.map((it) => {
                   const on = selected.has(it.id);
@@ -152,7 +154,7 @@ function NewOutfit() {
 
       <div className="sticky bottom-24 mt-8">
         <Button onClick={save} disabled={saving} className="w-full">
-          {saving ? "Speichern…" : "Look speichern"}
+          {saving ? t("outfitNew.saving") : t("outfitNew.save")}
         </Button>
       </div>
     </div>

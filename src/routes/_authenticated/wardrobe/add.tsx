@@ -19,16 +19,17 @@ import {
 } from "@/components/ui/dialog";
 import { X, ImagePlus, Sparkles, Check, Crop, PencilLine } from "lucide-react";
 import { toast } from "sonner";
+import { useLanguage } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_authenticated/wardrobe/add")({
   component: AddItem,
   head: () => ({
     meta: [
-      { title: "Neues Teil — Aivy & Me" },
+      { title: "New Items — Aivy & Me" },
       {
         name: "description",
         content:
-          "Kleidungsstücke hinzufügen — Foto zuschneiden, getragene Outfits automatisch erkennen, Duplikate abgleichen.",
+          "Add clothing items — crop photo, automatically recognize worn outfits, match duplicates.",
       },
     ],
   }),
@@ -99,6 +100,7 @@ function imageDims(src: string): Promise<{ w: number; h: number }> {
 }
 
 function AddItem() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const detect = useServerFn(detectItems);
   const smooth = useServerFn(smoothItemImage);
@@ -159,11 +161,7 @@ function AddItem() {
         .filter((e): e is { it: (typeof items)[number]; crop: string } => typeof e.crop === "string");
       const discarded = items.length - kept.length;
       if (discarded > 0) {
-        toast(
-          discarded === 1
-            ? "1 Teil konnte nicht sauber zugeschnitten werden"
-            : `${discarded} Teile konnten nicht sauber zugeschnitten werden`,
-        );
+        toast(discarded === 1 ? t("add.itemNotFound") : t("add.itemsNotFound", { count: discarded }));
       }
       const stamp = Date.now();
       const next: Draft[] = kept.map(({ it, crop }, i) => ({
@@ -189,16 +187,16 @@ function AddItem() {
       }));
       setDrafts((prev) => (append ? [...prev, ...next] : next));
       if (!kept.length) {
-        toast("Kein Kleidungsstück erkannt", {
-          description: "Zoome mit „Wurde etwas nicht erkannt?“ näher an das Teil heran.",
+        toast(t("add.noItemsDetected"), {
+          description: t("add.noItemsDetectedHint"),
         });
       } else {
-        toast.success(kept.length > 1 ? `${kept.length} Teile erkannt` : "Teil erkannt", {
+        toast.success(kept.length > 1 ? t("add.itemsDetected", { count: kept.length }) : t("add.itemDetected"), {
           description: kept.map((k) => k.it.name).join(", "),
         });
       }
     } catch (e: any) {
-      toast.error("Automatische Erkennung fehlgeschlagen", { description: e.message });
+      toast.error(t("add.detectionFailed"), { description: e.message });
     } finally {
       setAnalyzing(false);
     }
@@ -211,7 +209,7 @@ function AddItem() {
   async function onSave() {
     if (!dataUrl) return;
     const chosen = drafts.filter((d) => d.include);
-    if (!chosen.length) return toast.error("Wähle mindestens ein Teil aus");
+    if (!chosen.length) return toast.error(t("add.selectAtLeastOne"));
     setPhase("generating");
     // Schritt 3: KI-Bilder erst jetzt erzeugen
     const generated = await Promise.all(
@@ -219,7 +217,7 @@ function AddItem() {
         // STRIKT: nur der Ausschnitt genau dieses Teils (oder ein Einzelfoto der Nutzerin)
         const base = d.sourceDataUrl || d.cropDataUrl;
         if (!base) {
-          toast.error(`Kein Einzel-Ausschnitt für „${d.name}"`);
+          toast.error(t("add.noSingleCrop", { name: d.name }));
           return { ...d, aiDataUrl: "", aiDataUrl2: "" };
         }
         // Zu kleiner oder zu schmaler Ausschnitt → KI würde Details erfinden: direkt den Zuschnitt verwenden
@@ -247,8 +245,8 @@ function AddItem() {
           });
           aiDataUrl = `data:image/png;base64,${b64}`;
         } catch {
-          toast.error(`KI-Bild für „${d.name}" fehlgeschlagen`, {
-            description: "Das Originalfoto wird verwendet.",
+          toast.error(t("add.aiImageFailed", { name: d.name }), {
+            description: t("add.originalWillBeUsed"),
           });
         }
         if (d.category === "schuhe") {
@@ -268,7 +266,7 @@ function AddItem() {
 
   function removeDraft(key: string) {
     setDrafts((ds) => ds.filter((d) => d.key !== key));
-    toast("Vorschlag verworfen");
+    toast(t("add.discarded"));
   }
 
   /** Inline-Korrektur direkt auf der Karte (ohne Dialog), z. B. „Cardigan offen“. */
@@ -290,7 +288,7 @@ function AddItem() {
       });
     } catch (e: any) {
       patch(key, { hintBusy: false });
-      toast.error(e.message ?? "Korrektur fehlgeschlagen");
+      toast.error(e.message ?? t("add.correctionFailed"));
     }
   }
 
@@ -325,9 +323,9 @@ function AddItem() {
       setCorrectText("");
       setCorrectImage("");
       void base;
-      toast.success(`Korrektur übernommen: ${refined.name}`);
+      toast.success(t("add.correctionApplied", { name: refined.name }));
     } catch (e: any) {
-      toast.error(e.message ?? "Korrektur fehlgeschlagen");
+      toast.error(e.message ?? t("add.correctionFailed"));
     } finally {
       setCorrecting(false);
     }
@@ -335,7 +333,7 @@ function AddItem() {
 
   async function saveInner(chosen: Draft[]) {
     if (!dataUrl) return;
-    if (!chosen.length) return toast.error("Wähle mindestens ein Teil aus");
+    if (!chosen.length) return toast.error(t("add.selectAtLeastOne"));
     setSaving(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -391,11 +389,11 @@ function AddItem() {
       }
       const { error: insErr } = await supabase.from("wardrobe_items").insert(rows);
       if (insErr) throw insErr;
-      toast.success(rows.length > 1 ? `${rows.length} Teile gespeichert` : "Teil gespeichert");
+      toast.success(rows.length > 1 ? t("add.itemsSaved", { count: rows.length }) : t("add.itemSaved"));
       setAddedCount(rows.length);
       setPhase("done");
     } catch (e: any) {
-      toast.error(e.message ?? "Speichern fehlgeschlagen");
+      toast.error(e.message ?? t("add.saveFailed"));
       setPhase("review");
     } finally {
       setSaving(false);
@@ -431,17 +429,11 @@ function AddItem() {
         <Link to="/wardrobe" className="rounded-full border border-border p-2">
           <X className="h-5 w-5" strokeWidth={1.5} />
         </Link>
-        <h1 className="text-xl">Neue Teile</h1>
+        <h1 className="text-xl">{t("add.title")}</h1>
         <div className="w-9" />
       </header>
 
-      <p className="mb-6 text-center text-sm text-muted-foreground">
-        Fotografiere einzelne Teile, mehrere auf einmal — oder lade ein Foto von dir im Outfit hoch.
-        Die KI erkennt Bekleidung — Oberteile, Pullover, Jacken, Hosen, Röcke und Kleider — sowie
-        Schuhe und schneidet sie aus deinem Foto zu. Socken und Accessoires wie Schmuck oder
-        Taschen werden bewusst nicht erkannt. Die KI-Bilder werden erst nach deiner Bestätigung
-        erstellt.
-      </p>
+      <p className="mb-6 text-center text-sm text-muted-foreground">{t("add.intro")}</p>
 
       <div className="mb-6 rounded-3xl bg-card p-4 shadow-sm">
         {dataUrl ? (
@@ -452,7 +444,7 @@ function AddItem() {
             className="flex w-full flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-border py-12"
           >
             <ImagePlus className="h-10 w-10 text-muted-foreground" strokeWidth={1.5} />
-            <span className="text-sm text-muted-foreground">Foto auswählen (JPG, PNG, HEIC)</span>
+            <span className="text-sm text-muted-foreground">{t("add.choosePhoto")}</span>
           </button>
         )}
         <input
@@ -466,10 +458,10 @@ function AddItem() {
           <div className="mt-3 grid grid-cols-2 gap-2">
             <Button variant="outline" onClick={() => setCropping(true)}>
               <Crop className="mr-2 h-4 w-4" />
-              Zuschneiden
+              {t("add.crop")}
             </Button>
             <Button variant="outline" onClick={() => fileRef.current?.click()}>
-              Foto ändern
+              {t("add.changePhoto")}
             </Button>
           </div>
         )}
@@ -489,15 +481,15 @@ function AddItem() {
                   style={{ borderRadius: "44% 56% 60% 40% / 54% 46% 58% 42%" }}
                 />
               </div>
-              <span>KI analysiert dein Foto…</span>
+              <span>{t("add.analyzing")}</span>
             </>
           ) : (
             <>
               <Sparkles className="h-4 w-4" />
               <span>
                 {multi
-                  ? `${drafts.filter((d) => d.include).length} von ${drafts.length} Teilen werden angelegt`
-                  : "Passt das? Ändere gerne noch:"}
+                  ? t("add.itemsWillBeCreated", { included: drafts.filter((d) => d.include).length, total: drafts.length })
+                  : t("add.confirmOrEdit")}
               </span>
             </>
           )}
@@ -507,7 +499,7 @@ function AddItem() {
       {dataUrl && !analyzing && drafts.length === 0 && (
         <Button variant="outline" onClick={() => analyze(dataUrl)} className="mb-4 w-full">
           <Sparkles className="mr-2 h-4 w-4" />
-          Teile erkennen
+          {t("add.detectItems")}
         </Button>
       )}
 
@@ -521,7 +513,7 @@ function AddItem() {
           className="mb-4 w-full"
         >
           <Crop className="mr-2 h-4 w-4" />
-          Wurde etwas nicht erkannt? Bereich heranzoomen
+          {t("add.missedSomething")}
         </Button>
       )}
 
@@ -535,29 +527,27 @@ function AddItem() {
             <button
               type="button"
               onClick={() => removeDraft(d.key)}
-              aria-label="Vorschlag nicht übernehmen"
+              aria-label={t("add.removeSuggestion")}
               className="absolute right-3 top-3 rounded-full border border-border bg-background p-1.5 text-muted-foreground"
             >
               <X className="h-4 w-4" strokeWidth={1.5} />
             </button>
             {d.matchName && !d.duplicateDecided && (
               <div className="rounded-2xl border border-primary/40 bg-accent p-4">
-                <p className="text-sm">
-                  Kennen wir das schon? Das sieht aus wie „{d.matchName}" in deinem Schrank.
-                </p>
+                <p className="text-sm">{t("add.duplicateQuestion", { name: d.matchName })}</p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => patch(d.key, { duplicateDecided: true, include: false })}
                   >
-                    Ja, dasselbe
+                    {t("add.duplicateSame")}
                   </Button>
                   <Button
                     size="sm"
                     onClick={() => patch(d.key, { duplicateDecided: true, include: true })}
                   >
-                    Nein, neu anlegen
+                    {t("add.duplicateNew")}
                   </Button>
                 </div>
               </div>
@@ -565,8 +555,8 @@ function AddItem() {
             {d.matchName && d.duplicateDecided && (
               <p className="text-xs text-muted-foreground">
                 {d.include
-                  ? `Wird trotz Ähnlichkeit zu „${d.matchName}" neu angelegt.`
-                  : `Bereits im Schrank als „${d.matchName}" — wird nicht noch einmal angelegt.`}
+                  ? t("add.duplicateWillCreate", { name: d.matchName })
+                  : t("add.duplicateWillSkip", { name: d.matchName })}
               </p>
             )}
 
@@ -585,12 +575,12 @@ function AddItem() {
               <div className="min-w-0 flex-1 space-y-2">
                 <p className="text-xs text-muted-foreground">
                   {d.smoothing
-                    ? "KI-Bild wird erstellt…"
+                    ? t("add.aiImageLoading")
                     : d.keepOriginal
-                      ? "Originalfoto"
+                      ? t("add.originalPhoto")
                       : d.aiDataUrl
-                        ? "KI-Bild"
-                        : "Ausschnitt aus deinem Foto"}
+                        ? t("add.aiImage")
+                        : t("add.crop2")}
                 </p>
                 <button
                   type="button"
@@ -598,7 +588,7 @@ function AddItem() {
                   className="flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-left text-xs"
                 >
                   <Box checked={d.keepOriginal} />
-                  Originalbild behalten
+                  {t("add.keepOriginal")}
                 </button>
                 {multi && (
                   <button
@@ -607,18 +597,18 @@ function AddItem() {
                     className="flex w-full items-center gap-2 rounded-xl border border-border px-3 py-2 text-left text-xs"
                   >
                     <Box checked={d.include} />
-                    Teil anlegen
+                    {t("add.addItem")}
                   </button>
                 )}
               </div>
             </div>
 
             <div>
-              <Label className="mb-2 block">Name</Label>
+              <Label className="mb-2 block">{t("item.name")}</Label>
               <Input
                 value={d.name}
                 onChange={(e) => patch(d.key, { name: e.target.value })}
-                placeholder="z. B. Beiger Blazer"
+                placeholder={t("add.namePlaceholder")}
               />
               <div
                 className={`grid transition-all duration-200 ease-out ${
@@ -633,18 +623,18 @@ function AddItem() {
                     onChange={(e) => patch(d.key, { hint: e.target.value })}
                     onBlur={() => void applyHint(d.key)}
                     disabled={d.hintBusy}
-                    placeholder="Kurzer Hinweis? z. B. 'Cardigan offen'"
+                    placeholder={t("add.hintPlaceholder")}
                     className="h-9 border-dashed text-xs text-muted-foreground"
                   />
                   {d.hintBusy && (
-                    <p className="mt-1.5 text-xs text-muted-foreground">Hinweis wird übernommen…</p>
+                    <p className="mt-1.5 text-xs text-muted-foreground">{t("add.hintSaving")}</p>
                   )}
                 </div>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>Kategorie</Label>
+              <Label>{t("add.category")}</Label>
               <div className="flex flex-wrap gap-2">
                 {CATEGORIES.map((c) => (
                   <button
@@ -653,18 +643,18 @@ function AddItem() {
                     onClick={() => patch(d.key, { category: c.value })}
                     className={`rounded-full border px-3 py-1.5 text-sm ${d.category === c.value ? "border-primary bg-accent" : "border-border bg-background"}`}
                   >
-                    {c.label}
+                    {t(c.labelKey)}
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>Farbe</Label>
+              <Label>{t("add.color")}</Label>
               <Input
                 value={d.color}
                 onChange={(e) => patch(d.key, { color: e.target.value })}
-                placeholder="z. B. Beige"
+                placeholder={t("add.colorPlaceholder")}
               />
             </div>
 
@@ -677,13 +667,13 @@ function AddItem() {
               className="flex w-full items-center justify-center gap-2 rounded-xl border border-border px-3 py-2 text-xs text-muted-foreground"
             >
               <PencilLine className="h-3.5 w-3.5" />
-              Falsch erkannt? Beschreiben & neu erzeugen
+              {t("add.wrongDetection")}
             </button>
             {d.correction && (
-              <p className="text-xs text-muted-foreground">Deine Korrektur: „{d.correction}"</p>
+              <p className="text-xs text-muted-foreground">{t("add.yourCorrection", { text: d.correction })}</p>
             )}
             {d.sourceDataUrl && (
-              <p className="text-xs text-muted-foreground">Eigenes Einzelfoto angehängt</p>
+              <p className="text-xs text-muted-foreground">{t("add.ownPhotoAttached")}</p>
             )}
           </div>
         ))}
@@ -692,17 +682,14 @@ function AddItem() {
       <Dialog open={!!correctKey} onOpenChange={(o) => !o && setCorrectKey(null)}>
         <DialogContent className="rounded-3xl">
           <DialogHeader>
-            <DialogTitle>Was ist es wirklich?</DialogTitle>
-            <DialogDescription>
-              Beschreibe kurz, was falsch erkannt wurde — oder lade einfach ein einzelnes Foto genau
-              dieses Teils hoch. Name, Kategorie und KI-Bild werden neu erzeugt.
-            </DialogDescription>
+            <DialogTitle>{t("add.correctionDialogTitle")}</DialogTitle>
+            <DialogDescription>{t("add.correctionDialogDesc")}</DialogDescription>
           </DialogHeader>
           <Textarea
             value={correctText}
             onChange={(e) => setCorrectText(e.target.value)}
             rows={4}
-            placeholder="z. B. Das ist ein Cardigan, offen zu tragen, mit V-Ausschnitt."
+            placeholder={t("add.correctionPlaceholder")}
           />
           <input
             ref={correctFileRef}
@@ -721,13 +708,11 @@ function AddItem() {
           {correctImage ? (
             <div className="flex items-center gap-3 rounded-2xl border border-border p-3">
               <img src={correctImage} alt="" className="h-16 w-16 rounded-xl object-cover" />
-              <p className="flex-1 text-xs text-muted-foreground">
-                Dieses Foto wird als Grundlage für das Teil verwendet.
-              </p>
+              <p className="flex-1 text-xs text-muted-foreground">{t("add.photoWillBeUsed")}</p>
               <button
                 type="button"
                 onClick={() => setCorrectImage("")}
-                aria-label="Foto entfernen"
+                aria-label={t("add.removePhoto")}
                 className="rounded-full border border-border p-1.5 text-muted-foreground"
               >
                 <X className="h-4 w-4" strokeWidth={1.5} />
@@ -736,7 +721,7 @@ function AddItem() {
           ) : (
             <Button variant="outline" onClick={() => correctFileRef.current?.click()}>
               <ImagePlus className="mr-2 h-4 w-4" />
-              Einzelfoto dieses Teils anhängen
+              {t("add.attachOwnPhoto")}
             </Button>
           )}
           <DialogFooter>
@@ -747,13 +732,13 @@ function AddItem() {
                 setCorrectImage("");
               }}
             >
-              Abbrechen
+              {t("add.cancel")}
             </Button>
             <Button
               onClick={applyCorrection}
               disabled={correcting || (!correctText.trim() && !correctImage)}
             >
-              {correcting ? "Übernehme…" : "Korrektur übernehmen"}
+              {correcting ? t("add.applying") : t("add.applyCorrection")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -762,9 +747,7 @@ function AddItem() {
       {phase === "done" && (
         <div className="mt-6 space-y-4 rounded-3xl bg-card p-5 text-center shadow-sm">
           <p className="text-sm">
-            {addedCount > 1
-              ? `${addedCount} Teile wurden deinem Kleiderschrank hinzugefügt.`
-              : "Das Teil wurde deinem Kleiderschrank hinzugefügt."}
+            {addedCount > 1 ? t("add.doneMany", { count: addedCount }) : t("add.doneOne")}
           </p>
           <button
             type="button"
@@ -772,15 +755,13 @@ function AddItem() {
             aria-disabled="true"
             className="flex w-full cursor-not-allowed items-center justify-between gap-3 rounded-2xl border border-border bg-secondary/60 px-4 py-3 text-left text-xs text-muted-foreground opacity-60"
           >
-            <span>
-              Auch Accessoires wie Schmuck, Gürtel oder Taschen automatisch erkennen lassen?
-            </span>
+            <span>{t("add.accessoriesUpsell")}</span>
             <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide">
               Pro
             </span>
           </button>
           <Button className="w-full" onClick={() => navigate({ to: "/wardrobe" })}>
-            Zum Kleiderschrank
+            {t("add.goToWardrobe")}
           </Button>
         </div>
       )}
@@ -793,12 +774,12 @@ function AddItem() {
             className="w-full shadow-lg"
           >
             {saving
-              ? "Speichern…"
+              ? t("add.saving")
               : phase === "generating"
-                ? "KI-Bilder werden erstellt…"
+                ? t("add.creatingImages")
                 : multi
-                  ? `${drafts.filter((d) => d.include).length} Teile bestätigen & Bilder erstellen`
-                  : "Bestätigen & Bild erstellen"}
+                  ? t("add.confirmAndCreateMulti", { count: drafts.filter((d) => d.include).length })
+                  : t("add.confirmAndCreate")}
           </Button>
         </div>
       )}
