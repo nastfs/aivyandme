@@ -43,9 +43,11 @@ import {
   X,
 } from "lucide-react";
 
-async function urlToDataUrl(url: string, maxSide = 768): Promise<string> {
-  const blob = await (await fetch(url)).blob();
-  const bitmap = await createImageBitmap(blob);
+/** Load a wardrobe storage path into a square data URL (avoids CORS on signed URLs). */
+async function pathToDataUrl(path: string, maxSide = 768): Promise<string> {
+  const { data, error } = await supabase.storage.from("wardrobe").download(path);
+  if (error || !data) throw new Error(error?.message ?? "Image download failed");
+  const bitmap = await createImageBitmap(data);
   const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
   const w = Math.max(1, Math.round(bitmap.width * scale));
   const h = Math.max(1, Math.round(bitmap.height * scale));
@@ -302,9 +304,9 @@ function Home() {
       try {
         const items = [];
         for (const it of moodboardItems.slice(0, 6)) {
-          const url = data.urls[displayPath(it)];
-          if (!url) continue;
-          const imageDataUrl = await urlToDataUrl(url);
+          const path = displayPath(it);
+          if (!path) continue;
+          const imageDataUrl = await pathToDataUrl(path);
           items.push({ imageDataUrl, category: it.category, name: it.name });
         }
         if (cancelled || reqId !== moodboardReqId.current) return;
@@ -335,10 +337,10 @@ function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moodboardItems, data?.urls, composeMoodboard]);
 
-  // Vor dem ersten Laden nichts anzeigen — sonst blitzt kurz die Anlass-Frage auf,
-  // obwohl eigentlich schon ein Outfit für heute geplant ist.
+  // Show a suggestion as soon as the wardrobe is loaded — occasion is optional and
+  // only refines the look. Don't wait for the user to pick one.
   const showOccasionPicker = !isPending && !plannedOutfit;
-  const showSuggestion = !isPending && Boolean(plannedOutfit || occasion);
+  const showSuggestion = !isPending && (Boolean(plannedOutfit) || allItems.length > 0);
 
   return (
     <div className="px-6 pt-10">
@@ -354,32 +356,6 @@ function Home() {
           <Bell className="h-5 w-5" strokeWidth={1.5} />
         </button>
       </header>
-
-      {showOccasionPicker && (
-        <section className="mb-8">
-          <h2 className="mb-3 text-xl">{t("home.whatsToday")}</h2>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {OCCASIONS.map((o) => {
-              const Icon = o.icon;
-              const active = occasion === o.value;
-              return (
-                <button
-                  key={o.value}
-                  type="button"
-                  onClick={() => chooseOccasion(o.value)}
-                  disabled={savingOccasion}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-sm transition disabled:opacity-60 ${
-                    active ? "border-primary bg-accent" : "border-border bg-card hover:bg-secondary"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" strokeWidth={1.5} />
-                  {t(o.labelKey)}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      )}
 
       {showSuggestion && (
       <section className="mb-8">
@@ -501,6 +477,32 @@ function Home() {
           </div>
         )}
       </section>
+      )}
+
+      {showOccasionPicker && (
+        <section className="mb-8">
+          <h2 className="mb-3 text-xl">{t("home.whatsToday")}</h2>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {OCCASIONS.map((o) => {
+              const Icon = o.icon;
+              const active = occasion === o.value;
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => chooseOccasion(o.value)}
+                  disabled={savingOccasion}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-sm transition disabled:opacity-60 ${
+                    active ? "border-primary bg-accent" : "border-border bg-card hover:bg-secondary"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" strokeWidth={1.5} />
+                  {t(o.labelKey)}
+                </button>
+              );
+            })}
+          </div>
+        </section>
       )}
 
       <Dialog open={picker != null} onOpenChange={(open) => !open && setPicker(null)}>
