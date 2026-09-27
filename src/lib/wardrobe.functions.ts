@@ -121,16 +121,17 @@ export const composeOutfitMoodboard = createServerFn({ method: "POST" })
       .join("\n");
 
     const promptText =
-      "Erzeuge EIN einziges professionelles Mode-Magazin Flat-Lay / Moodboard-Foto. " +
-      "Hintergrund: durchgehend reinweiß (#FFFFFF) — identisch hinter JEDEM Teil, auch hinter Schuhen und Taschen. " +
+      "Erzeuge EIN einziges professionelles Mode-Magazin Flat-Lay / Moodboard-Foto eines VOLLSTÄNDIGEN Outfits. " +
+      "Ziel: Ein komplettes Lookbook-Outfit — nicht nur zwei Teile. Zeige ALLE gelieferten Stücke als zusammengehöriges Ensemble. " +
+      "Hintergrund: durchgehend reinweiß (#FFFFFF) — identisch hinter JEDEM Teil, auch hinter Schuhen, Taschen und Schmuck. " +
       "Keine grauen, beigen, cremefarbenen oder farbigen Flächen, Podeste, Schattenplatten oder unterschiedlichen Hintergründe pro Objekt. " +
-      "Komponiere AUSSCHLIESSLICH die mitgelieferten Kleidungsstücke und Accessoires aus den Eingabebildern. " +
-      "STRIKTES Layout (Editorial, portrait): " +
+      "Komponiere AUSSCHLIESSLICH die mitgelieferten Kleidungsstücke und Accessoires aus den Eingabebildern — erfinde nichts dazu. " +
+      "STRIKTES Layout (Editorial, portrait) für ein vollständiges Outfit: " +
       "OBEN links/mitte: Oberteile und Jacken/Blazer (niemals unten); " +
       "DARUNTER: Hosen, Röcke oder Kleider; " +
-      "RECHTS daneben (mittig bis unten): Tasche und Accessoires; " +
+      "RECHTS daneben (mittig): Tasche und Accessoires (z. B. Halskette, Schmuck) — Accessoires klar sichtbar, etwas kleiner; " +
       "UNTEN rechts: Schuhe. " +
-      "Große Kleidungsstücke dominieren die linke Hälfte; Accessoires sind kleiner und rechts. " +
+      "Große Kleidungsstücke dominieren die linke Hälfte; Accessoires und Schuhe rechts/unten. " +
       "Nichts überlappen, gleichmäßige Abstände, ausgewogene Komposition, alles vollständig sichtbar, kein Abschneiden. " +
       "Jedes Teil freigestellt, flach liegend, weiches Studiolicht, scharfe Kanten, keine Personen, keine Kleiderbügel, kein Text. " +
       "Wenn ein Eingabebild einen grauen oder andersfarbigen Hintergrund hat: ersetze ihn durch denselben reinweißen Hintergrund wie bei den anderen Teilen. " +

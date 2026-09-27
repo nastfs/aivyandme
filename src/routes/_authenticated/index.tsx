@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { signedUrlsMap, displayPath } from "@/lib/storage";
 import { categoryLabel } from "@/lib/categories";
-import { suggestOutfit, type Occasion, type ItemScores, type SuggestItem } from "@/lib/suggest-outfit";
+import { suggestOutfit, type Occasion, type ItemScores, type SuggestItem, MAX_OUTFIT_PIECES } from "@/lib/suggest-outfit";
 import { composeOutfitMoodboard } from "@/lib/wardrobe.functions";
 import { useLanguage } from "@/lib/i18n";
 import {
@@ -259,7 +259,7 @@ function Home() {
         return next;
       });
     } else {
-      setPieces((prev) => (prev.length >= 6 ? prev : [...prev, item]));
+      setPieces((prev) => (prev.length >= MAX_OUTFIT_PIECES ? prev : [...prev, item]));
     }
     setFeedbackSent(false);
     setPicker(null);
@@ -303,7 +303,7 @@ function Home() {
     (async () => {
       try {
         const items = [];
-        for (const it of moodboardItems.slice(0, 6)) {
+        for (const it of moodboardItems.slice(0, MAX_OUTFIT_PIECES)) {
           const path = displayPath(it);
           if (!path) continue;
           const imageDataUrl = await pathToDataUrl(path);
@@ -429,7 +429,7 @@ function Home() {
                   </p>
                 </div>
               ))}
-              {pieces.length < 6 && (
+              {pieces.length < MAX_OUTFIT_PIECES && (
                 <div className="w-24 shrink-0">
                   <button
                     type="button"
